@@ -1,0 +1,2 @@
+pair_style mace
+pair_coeff * * /Users/ksenis/pyiron/projects/CuZr/Notebooks/CuZr_mace_debug.model Cu

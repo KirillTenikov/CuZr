@@ -1,0 +1,231 @@
+2026-03-06 14:21:50.336 INFO: ===========VERIFYING SETTINGS===========
+2026-03-06 14:21:50.336 INFO: MACE version: 0.3.14
+2026-03-06 14:21:50.356 INFO: Using MPS GPU acceleration
+2026-03-06 14:21:50.566 INFO: ===========LOADING INPUT DATA===========
+2026-03-06 14:21:50.566 INFO: Using heads: ['Default']
+2026-03-06 14:21:50.566 INFO: Using the key specifications to parse data:
+2026-03-06 14:21:50.566 INFO: Default: KeySpecification(info_keys={'energy': 'REF_energy', 'stress': 'REF_stress', 'virials': 'REF_virials', 'dipole': 'dipole', 'head': 'head', 'elec_temp': 'elec_temp', 'total_charge': 'total_charge', 'polarizability': 'polarizability', 'total_spin': 'total_spin'}, arrays_keys={'forces': 'REF_forces', 'charges': 'REF_charges'})
+2026-03-06 14:21:50.566 INFO: =============    Processing head Default     ===========
+2026-03-06 14:29:01.559 INFO: ===========VERIFYING SETTINGS===========
+2026-03-06 14:29:01.560 INFO: MACE version: 0.3.14
+2026-03-06 14:29:01.579 INFO: Using MPS GPU acceleration
+2026-03-06 14:29:01.628 INFO: ===========LOADING INPUT DATA===========
+2026-03-06 14:29:01.628 INFO: Using heads: ['Default']
+2026-03-06 14:29:01.628 INFO: Using the key specifications to parse data:
+2026-03-06 14:29:01.628 INFO: Default: KeySpecification(info_keys={'energy': 'energy', 'stress': 'REF_stress', 'virials': 'REF_virials', 'dipole': 'dipole', 'head': 'head', 'elec_temp': 'elec_temp', 'total_charge': 'total_charge', 'polarizability': 'polarizability', 'total_spin': 'total_spin'}, arrays_keys={'forces': 'forces', 'charges': 'REF_charges'})
+2026-03-06 14:29:01.628 INFO: =============    Processing head Default     ===========
+2026-03-06 14:29:01.683 WARNING: Since ASE version 3.23.0b1, using energy_key 'energy' is no longer safe when communicating between MACE and ASE. We recommend using a different key, rewriting 'energy' to 'REF_energy'. You need to use --energy_key='REF_energy' to specify the chosen key name.
+2026-03-06 14:29:01.694 WARNING: Since ASE version 3.23.0b1, using forces_key 'forces' is no longer safe when communicating between MACE and ASE. We recommend using a different key, rewriting 'forces' to 'REF_forces'. You need to use --forces_key='REF_forces' to specify the chosen key name.
+2026-03-06 14:29:01.708 INFO: Training set 1/1 [energy: 200, stress: 0, virials: 0, dipole components: 0, head: 200, elec_temp: 0, total_charge: 0, polarizability: 0, total_spin: 0, forces: 200, charges: 0]
+2026-03-06 14:29:01.709 INFO: Total Training set [energy: 200, stress: 0, virials: 0, dipole components: 0, head: 200, elec_temp: 0, total_charge: 0, polarizability: 0, total_spin: 0, forces: 200, charges: 0]
+2026-03-06 14:29:01.709 INFO: No validation set provided, splitting training data instead.
+2026-03-06 14:29:01.709 INFO: Using random 5% of training set for validation with indices saved in: ./valid_indices_123.txt
+2026-03-06 14:29:01.709 INFO: Random Split Training set [energy: 190, stress: 0, virials: 0, dipole components: 0, head: 190, elec_temp: 0, total_charge: 0, polarizability: 0, total_spin: 0, forces: 190, charges: 0]
+2026-03-06 14:29:01.709 INFO: Random Split Validation set [energy: 10, stress: 0, virials: 0, dipole components: 0, head: 10, elec_temp: 0, total_charge: 0, polarizability: 0, total_spin: 0, forces: 10, charges: 0]
+2026-03-06 14:29:01.709 INFO: Total number of configurations: train=190, valid=10, tests=[],
+2026-03-06 14:29:01.711 INFO: Atomic Numbers used: [np.int64(29), np.int64(40)]
+2026-03-06 14:31:22.946 INFO: ===========VERIFYING SETTINGS===========
+2026-03-06 14:31:22.947 INFO: MACE version: 0.3.14
+2026-03-06 14:31:22.964 INFO: Using MPS GPU acceleration
+2026-03-06 14:31:23.018 INFO: ===========LOADING INPUT DATA===========
+2026-03-06 14:31:23.018 INFO: Using heads: ['Default']
+2026-03-06 14:31:23.018 INFO: Using the key specifications to parse data:
+2026-03-06 14:31:23.018 INFO: Default: KeySpecification(info_keys={'energy': 'energy', 'stress': 'REF_stress', 'virials': 'REF_virials', 'dipole': 'dipole', 'head': 'head', 'elec_temp': 'elec_temp', 'total_charge': 'total_charge', 'polarizability': 'polarizability', 'total_spin': 'total_spin'}, arrays_keys={'forces': 'forces', 'charges': 'REF_charges'})
+2026-03-06 14:31:23.018 INFO: =============    Processing head Default     ===========
+2026-03-06 14:31:23.076 WARNING: Since ASE version 3.23.0b1, using energy_key 'energy' is no longer safe when communicating between MACE and ASE. We recommend using a different key, rewriting 'energy' to 'REF_energy'. You need to use --energy_key='REF_energy' to specify the chosen key name.
+2026-03-06 14:31:23.087 WARNING: Since ASE version 3.23.0b1, using forces_key 'forces' is no longer safe when communicating between MACE and ASE. We recommend using a different key, rewriting 'forces' to 'REF_forces'. You need to use --forces_key='REF_forces' to specify the chosen key name.
+2026-03-06 14:31:23.101 INFO: Training set 1/1 [energy: 200, stress: 0, virials: 0, dipole components: 0, head: 200, elec_temp: 0, total_charge: 0, polarizability: 0, total_spin: 0, forces: 200, charges: 0]
+2026-03-06 14:31:23.102 INFO: Total Training set [energy: 200, stress: 0, virials: 0, dipole components: 0, head: 200, elec_temp: 0, total_charge: 0, polarizability: 0, total_spin: 0, forces: 200, charges: 0]
+2026-03-06 14:31:23.102 INFO: No validation set provided, splitting training data instead.
+2026-03-06 14:31:23.103 INFO: Using random 5% of training set for validation with indices saved in: ./valid_indices_123.txt
+2026-03-06 14:31:23.103 INFO: Random Split Training set [energy: 190, stress: 0, virials: 0, dipole components: 0, head: 190, elec_temp: 0, total_charge: 0, polarizability: 0, total_spin: 0, forces: 190, charges: 0]
+2026-03-06 14:31:23.104 INFO: Random Split Validation set [energy: 10, stress: 0, virials: 0, dipole components: 0, head: 10, elec_temp: 0, total_charge: 0, polarizability: 0, total_spin: 0, forces: 10, charges: 0]
+2026-03-06 14:31:23.104 INFO: Total number of configurations: train=190, valid=10, tests=[],
+2026-03-06 14:31:23.105 INFO: Atomic Numbers used: [np.int64(29), np.int64(40)]
+2026-03-06 14:38:35.513 INFO: ===========VERIFYING SETTINGS===========
+2026-03-06 14:38:35.513 INFO: MACE version: 0.3.14
+2026-03-06 14:38:35.529 INFO: Using MPS GPU acceleration
+2026-03-06 14:38:35.577 INFO: ===========LOADING INPUT DATA===========
+2026-03-06 14:38:35.577 INFO: Using heads: ['Default']
+2026-03-06 14:38:35.577 INFO: Using the key specifications to parse data:
+2026-03-06 14:38:35.577 INFO: Default: KeySpecification(info_keys={'energy': 'energy', 'stress': 'REF_stress', 'virials': 'REF_virials', 'dipole': 'dipole', 'head': 'head', 'elec_temp': 'elec_temp', 'total_charge': 'total_charge', 'polarizability': 'polarizability', 'total_spin': 'total_spin'}, arrays_keys={'forces': 'forces', 'charges': 'REF_charges'})
+2026-03-06 14:38:35.578 INFO: =============    Processing head Default     ===========
+2026-03-06 14:38:35.633 WARNING: Since ASE version 3.23.0b1, using energy_key 'energy' is no longer safe when communicating between MACE and ASE. We recommend using a different key, rewriting 'energy' to 'REF_energy'. You need to use --energy_key='REF_energy' to specify the chosen key name.
+2026-03-06 14:38:35.644 WARNING: Since ASE version 3.23.0b1, using forces_key 'forces' is no longer safe when communicating between MACE and ASE. We recommend using a different key, rewriting 'forces' to 'REF_forces'. You need to use --forces_key='REF_forces' to specify the chosen key name.
+2026-03-06 14:38:35.658 INFO: Training set 1/1 [energy: 200, stress: 0, virials: 0, dipole components: 0, head: 200, elec_temp: 0, total_charge: 0, polarizability: 0, total_spin: 0, forces: 200, charges: 0]
+2026-03-06 14:38:35.658 INFO: Total Training set [energy: 200, stress: 0, virials: 0, dipole components: 0, head: 200, elec_temp: 0, total_charge: 0, polarizability: 0, total_spin: 0, forces: 200, charges: 0]
+2026-03-06 14:38:35.658 INFO: No validation set provided, splitting training data instead.
+2026-03-06 14:38:35.659 INFO: Using random 5% of training set for validation with indices saved in: ./valid_indices_123.txt
+2026-03-06 14:38:35.659 INFO: Random Split Training set [energy: 190, stress: 0, virials: 0, dipole components: 0, head: 190, elec_temp: 0, total_charge: 0, polarizability: 0, total_spin: 0, forces: 190, charges: 0]
+2026-03-06 14:38:35.659 INFO: Random Split Validation set [energy: 10, stress: 0, virials: 0, dipole components: 0, head: 10, elec_temp: 0, total_charge: 0, polarizability: 0, total_spin: 0, forces: 10, charges: 0]
+2026-03-06 14:38:35.659 INFO: Total number of configurations: train=190, valid=10, tests=[],
+2026-03-06 14:38:35.660 INFO: Atomic Numbers used: [np.int64(29), np.int64(40)]
+2026-03-06 14:38:35.660 INFO: Isolated Atomic Energies (E0s) not in training file, using command line argument
+2026-03-06 14:38:35.660 INFO: Computing average Atomic Energies using least squares regression
+2026-03-06 14:38:35.661 INFO: Atomic Energies used (z: eV) for head Default: {29: -3.4016655127096507, 40: -5.9199569557376055}
+2026-03-06 14:38:35.661 INFO: Processing datasets for head 'Default'
+2026-03-06 14:38:35.833 INFO: Combining 1 list datasets for head 'Default'
+2026-03-06 14:38:35.840 INFO: Head 'Default' training dataset size: 190
+2026-03-06 14:38:35.841 INFO: Computing average number of neighbors
+2026-03-06 14:38:35.910 INFO: Average number of neighbors: 27.961362838745117
+2026-03-06 14:38:35.910 INFO: During training the following quantities will be reported: energy, forces
+2026-03-06 14:38:35.910 INFO: ===========MODEL DETAILS===========
+2026-03-06 14:38:35.964 INFO: Building model
+2026-03-06 14:38:35.964 INFO: Message passing with 64 channels and max_L=0 (64x0e)
+2026-03-06 14:38:35.964 INFO: 2 layers, each with correlation order: 3 (body order: 4) and spherical harmonics up to: l=2
+2026-03-06 14:38:35.964 INFO: 8 radial and 5 basis functions
+2026-03-06 14:38:35.964 INFO: Radial cutoff: 5.0 A (total receptive field for each atom: 10.0 A)
+2026-03-06 14:38:35.964 INFO: Distance transform for radial basis functions: None
+2026-03-06 14:38:35.964 INFO: Hidden irreps: 64x0e
+2026-03-06 14:38:36.505 INFO: Total number of parameters: 120784
+2026-03-06 14:38:36.505 INFO: 
+2026-03-06 14:38:36.505 INFO: ===========OPTIMIZER INFORMATION===========
+2026-03-06 14:38:36.505 INFO: Using ADAMW as parameter optimizer
+2026-03-06 14:38:36.505 INFO: Batch size: 2
+2026-03-06 14:38:36.505 INFO: Using Exponential Moving Average with decay: 0.999
+2026-03-06 14:38:36.505 INFO: Number of gradient updates: 1900
+2026-03-06 14:38:36.505 INFO: Learning rate: 0.001, weight decay: 1e-06
+2026-03-06 14:38:36.505 INFO: WeightedEnergyForcesLoss(energy_weight=1.000, forces_weight=1.000)
+2026-03-06 14:38:36.506 INFO: Using gradient clipping with tolerance=10.000
+2026-03-06 14:38:36.506 INFO: 
+2026-03-06 14:38:36.506 INFO: ===========TRAINING===========
+2026-03-06 14:38:36.507 INFO: Started training, reporting errors on validation set
+2026-03-06 14:38:36.507 INFO: Loss metrics on validation set
+2026-03-06 14:40:22.471 INFO: ===========VERIFYING SETTINGS===========
+2026-03-06 14:40:22.472 INFO: MACE version: 0.3.14
+2026-03-06 14:40:22.487 INFO: Using MPS GPU acceleration
+2026-03-06 14:40:22.537 INFO: ===========LOADING INPUT DATA===========
+2026-03-06 14:40:22.537 INFO: Using heads: ['Default']
+2026-03-06 14:40:22.537 INFO: Using the key specifications to parse data:
+2026-03-06 14:40:22.537 INFO: Default: KeySpecification(info_keys={'energy': 'energy', 'stress': 'REF_stress', 'virials': 'REF_virials', 'dipole': 'dipole', 'head': 'head', 'elec_temp': 'elec_temp', 'total_charge': 'total_charge', 'polarizability': 'polarizability', 'total_spin': 'total_spin'}, arrays_keys={'forces': 'forces', 'charges': 'REF_charges'})
+2026-03-06 14:40:22.538 INFO: =============    Processing head Default     ===========
+2026-03-06 14:40:22.594 WARNING: Since ASE version 3.23.0b1, using energy_key 'energy' is no longer safe when communicating between MACE and ASE. We recommend using a different key, rewriting 'energy' to 'REF_energy'. You need to use --energy_key='REF_energy' to specify the chosen key name.
+2026-03-06 14:40:22.604 WARNING: Since ASE version 3.23.0b1, using forces_key 'forces' is no longer safe when communicating between MACE and ASE. We recommend using a different key, rewriting 'forces' to 'REF_forces'. You need to use --forces_key='REF_forces' to specify the chosen key name.
+2026-03-06 14:40:22.618 INFO: Training set 1/1 [energy: 200, stress: 0, virials: 0, dipole components: 0, head: 200, elec_temp: 0, total_charge: 0, polarizability: 0, total_spin: 0, forces: 200, charges: 0]
+2026-03-06 14:40:22.619 INFO: Total Training set [energy: 200, stress: 0, virials: 0, dipole components: 0, head: 200, elec_temp: 0, total_charge: 0, polarizability: 0, total_spin: 0, forces: 200, charges: 0]
+2026-03-06 14:40:22.619 INFO: No validation set provided, splitting training data instead.
+2026-03-06 14:40:22.619 INFO: Using random 5% of training set for validation with indices saved in: ./valid_indices_123.txt
+2026-03-06 14:40:22.620 INFO: Random Split Training set [energy: 190, stress: 0, virials: 0, dipole components: 0, head: 190, elec_temp: 0, total_charge: 0, polarizability: 0, total_spin: 0, forces: 190, charges: 0]
+2026-03-06 14:40:22.620 INFO: Random Split Validation set [energy: 10, stress: 0, virials: 0, dipole components: 0, head: 10, elec_temp: 0, total_charge: 0, polarizability: 0, total_spin: 0, forces: 10, charges: 0]
+2026-03-06 14:40:22.620 INFO: Total number of configurations: train=190, valid=10, tests=[],
+2026-03-06 14:40:22.621 INFO: Atomic Numbers used: [np.int64(29), np.int64(40)]
+2026-03-06 14:40:22.621 INFO: Isolated Atomic Energies (E0s) not in training file, using command line argument
+2026-03-06 14:40:22.621 INFO: Computing average Atomic Energies using least squares regression
+2026-03-06 14:40:22.621 INFO: Atomic Energies used (z: eV) for head Default: {29: -3.4016655127096507, 40: -5.9199569557376055}
+2026-03-06 14:40:22.621 INFO: Processing datasets for head 'Default'
+2026-03-06 14:40:22.779 INFO: Combining 1 list datasets for head 'Default'
+2026-03-06 14:40:22.787 INFO: Head 'Default' training dataset size: 190
+2026-03-06 14:40:22.787 INFO: Computing average number of neighbors
+2026-03-06 14:40:22.844 INFO: Average number of neighbors: 27.961362838745117
+2026-03-06 14:40:22.845 INFO: During training the following quantities will be reported: energy, forces
+2026-03-06 14:40:22.845 INFO: ===========MODEL DETAILS===========
+2026-03-06 14:40:22.889 INFO: Building model
+2026-03-06 14:40:22.889 INFO: Message passing with 64 channels and max_L=0 (64x0e)
+2026-03-06 14:40:22.889 INFO: 2 layers, each with correlation order: 3 (body order: 4) and spherical harmonics up to: l=2
+2026-03-06 14:40:22.889 INFO: 8 radial and 5 basis functions
+2026-03-06 14:40:22.889 INFO: Radial cutoff: 5.0 A (total receptive field for each atom: 10.0 A)
+2026-03-06 14:40:22.889 INFO: Distance transform for radial basis functions: None
+2026-03-06 14:40:22.889 INFO: Hidden irreps: 64x0e
+2026-03-06 14:40:23.254 INFO: Total number of parameters: 120784
+2026-03-06 14:40:23.254 INFO: 
+2026-03-06 14:40:23.254 INFO: ===========OPTIMIZER INFORMATION===========
+2026-03-06 14:40:23.254 INFO: Using ADAMW as parameter optimizer
+2026-03-06 14:40:23.254 INFO: Batch size: 2
+2026-03-06 14:40:23.254 INFO: Using Exponential Moving Average with decay: 0.999
+2026-03-06 14:40:23.254 INFO: Number of gradient updates: 1900
+2026-03-06 14:40:23.254 INFO: Learning rate: 0.001, weight decay: 1e-06
+2026-03-06 14:40:23.254 INFO: WeightedEnergyForcesLoss(energy_weight=1.000, forces_weight=1.000)
+2026-03-06 14:40:23.255 INFO: Using gradient clipping with tolerance=10.000
+2026-03-06 14:40:23.255 INFO: 
+2026-03-06 14:40:23.255 INFO: ===========TRAINING===========
+2026-03-06 14:40:23.255 INFO: Started training, reporting errors on validation set
+2026-03-06 14:40:23.255 INFO: Loss metrics on validation set
+2026-03-06 14:45:30.491 INFO: ===========VERIFYING SETTINGS===========
+2026-03-06 14:45:30.492 INFO: MACE version: 0.3.14
+2026-03-06 14:45:30.492 INFO: Using CPU
+2026-03-06 14:45:30.542 INFO: ===========LOADING INPUT DATA===========
+2026-03-06 14:45:30.542 INFO: Using heads: ['Default']
+2026-03-06 14:45:30.542 INFO: Using the key specifications to parse data:
+2026-03-06 14:45:30.542 INFO: Default: KeySpecification(info_keys={'energy': 'energy', 'stress': 'REF_stress', 'virials': 'REF_virials', 'dipole': 'dipole', 'head': 'head', 'elec_temp': 'elec_temp', 'total_charge': 'total_charge', 'polarizability': 'polarizability', 'total_spin': 'total_spin'}, arrays_keys={'forces': 'forces', 'charges': 'REF_charges'})
+2026-03-06 14:45:30.542 INFO: =============    Processing head Default     ===========
+2026-03-06 14:45:30.597 WARNING: Since ASE version 3.23.0b1, using energy_key 'energy' is no longer safe when communicating between MACE and ASE. We recommend using a different key, rewriting 'energy' to 'REF_energy'. You need to use --energy_key='REF_energy' to specify the chosen key name.
+2026-03-06 14:45:30.608 WARNING: Since ASE version 3.23.0b1, using forces_key 'forces' is no longer safe when communicating between MACE and ASE. We recommend using a different key, rewriting 'forces' to 'REF_forces'. You need to use --forces_key='REF_forces' to specify the chosen key name.
+2026-03-06 14:45:30.622 INFO: Training set 1/1 [energy: 200, stress: 0, virials: 0, dipole components: 0, head: 200, elec_temp: 0, total_charge: 0, polarizability: 0, total_spin: 0, forces: 200, charges: 0]
+2026-03-06 14:45:30.622 INFO: Total Training set [energy: 200, stress: 0, virials: 0, dipole components: 0, head: 200, elec_temp: 0, total_charge: 0, polarizability: 0, total_spin: 0, forces: 200, charges: 0]
+2026-03-06 14:45:30.622 INFO: No validation set provided, splitting training data instead.
+2026-03-06 14:45:30.622 INFO: Using random 5% of training set for validation with indices saved in: ./valid_indices_123.txt
+2026-03-06 14:45:30.623 INFO: Random Split Training set [energy: 190, stress: 0, virials: 0, dipole components: 0, head: 190, elec_temp: 0, total_charge: 0, polarizability: 0, total_spin: 0, forces: 190, charges: 0]
+2026-03-06 14:45:30.623 INFO: Random Split Validation set [energy: 10, stress: 0, virials: 0, dipole components: 0, head: 10, elec_temp: 0, total_charge: 0, polarizability: 0, total_spin: 0, forces: 10, charges: 0]
+2026-03-06 14:45:30.623 INFO: Total number of configurations: train=190, valid=10, tests=[],
+2026-03-06 14:45:30.624 INFO: Atomic Numbers used: [np.int64(29), np.int64(40)]
+2026-03-06 14:45:30.624 INFO: Isolated Atomic Energies (E0s) not in training file, using command line argument
+2026-03-06 14:45:30.624 INFO: Computing average Atomic Energies using least squares regression
+2026-03-06 14:45:30.625 INFO: Atomic Energies used (z: eV) for head Default: {29: -3.4016655127096507, 40: -5.9199569557376055}
+2026-03-06 14:45:30.625 INFO: Processing datasets for head 'Default'
+2026-03-06 14:45:30.794 INFO: Combining 1 list datasets for head 'Default'
+2026-03-06 14:45:30.802 INFO: Head 'Default' training dataset size: 190
+2026-03-06 14:45:30.802 INFO: Computing average number of neighbors
+2026-03-06 14:45:30.918 INFO: Average number of neighbors: 27.961362838745117
+2026-03-06 14:45:30.918 INFO: During training the following quantities will be reported: energy, forces
+2026-03-06 14:45:30.918 INFO: ===========MODEL DETAILS===========
+2026-03-06 14:45:31.005 INFO: Building model
+2026-03-06 14:45:31.005 INFO: Message passing with 64 channels and max_L=0 (64x0e)
+2026-03-06 14:45:31.005 INFO: 2 layers, each with correlation order: 3 (body order: 4) and spherical harmonics up to: l=2
+2026-03-06 14:45:31.005 INFO: 8 radial and 5 basis functions
+2026-03-06 14:45:31.005 INFO: Radial cutoff: 5.0 A (total receptive field for each atom: 10.0 A)
+2026-03-06 14:45:31.005 INFO: Distance transform for radial basis functions: None
+2026-03-06 14:45:31.005 INFO: Hidden irreps: 64x0e
+2026-03-06 14:45:31.365 INFO: Total number of parameters: 120784
+2026-03-06 14:45:31.365 INFO: 
+2026-03-06 14:45:31.365 INFO: ===========OPTIMIZER INFORMATION===========
+2026-03-06 14:45:31.365 INFO: Using ADAMW as parameter optimizer
+2026-03-06 14:45:31.365 INFO: Batch size: 1
+2026-03-06 14:45:31.365 INFO: Using Exponential Moving Average with decay: 0.999
+2026-03-06 14:45:31.365 INFO: Number of gradient updates: 3800
+2026-03-06 14:45:31.365 INFO: Learning rate: 0.001, weight decay: 1e-06
+2026-03-06 14:45:31.367 INFO: WeightedEnergyForcesLoss(energy_weight=1.000, forces_weight=1.000)
+2026-03-06 14:45:31.368 INFO: Using gradient clipping with tolerance=10.000
+2026-03-06 14:45:31.368 INFO: 
+2026-03-06 14:45:31.368 INFO: ===========TRAINING===========
+2026-03-06 14:45:31.368 INFO: Started training, reporting errors on validation set
+2026-03-06 14:45:31.368 INFO: Loss metrics on validation set
+2026-03-06 14:45:31.874 INFO: Initial: head: Default, loss=2.08335996, RMSE_E_per_atom=  550.80 meV, RMSE_F= 1493.56 meV / A
+2026-03-06 14:45:46.879 INFO: Epoch 0: head: Default, loss=0.93695915, RMSE_E_per_atom=  561.84 meV, RMSE_F=  871.81 meV / A
+2026-03-06 14:46:02.196 INFO: Epoch 1: head: Default, loss=0.32722846, RMSE_E_per_atom=  242.07 meV, RMSE_F=  591.15 meV / A
+2026-03-06 14:46:18.360 INFO: Epoch 2: head: Default, loss=0.10714509, RMSE_E_per_atom=  221.08 meV, RMSE_F=  269.46 meV / A
+2026-03-06 14:46:33.935 INFO: Epoch 3: head: Default, loss=0.09089686, RMSE_E_per_atom=  231.96 meV, RMSE_F=  215.02 meV / A
+2026-03-06 14:46:49.776 INFO: Epoch 4: head: Default, loss=0.09243233, RMSE_E_per_atom=  241.88 meV, RMSE_F=  204.58 meV / A
+2026-03-06 14:47:06.869 INFO: Epoch 5: head: Default, loss=0.09677937, RMSE_E_per_atom=  257.03 meV, RMSE_F=  197.12 meV / A
+2026-03-06 14:47:23.296 INFO: Epoch 6: head: Default, loss=0.09757338, RMSE_E_per_atom=  260.84 meV, RMSE_F=  192.57 meV / A
+2026-03-06 14:47:39.053 INFO: Epoch 7: head: Default, loss=0.09760663, RMSE_E_per_atom=  259.98 meV, RMSE_F=  192.92 meV / A
+2026-03-06 14:47:55.528 INFO: Epoch 8: head: Default, loss=0.09966797, RMSE_E_per_atom=  266.91 meV, RMSE_F=  188.44 meV / A
+2026-03-06 14:48:13.110 INFO: Epoch 9: head: Default, loss=0.09919234, RMSE_E_per_atom=  266.21 meV, RMSE_F=  186.64 meV / A
+2026-03-06 14:48:30.348 INFO: Epoch 10: head: Default, loss=0.09986015, RMSE_E_per_atom=  266.61 meV, RMSE_F=  186.76 meV / A
+2026-03-06 14:48:46.873 INFO: Epoch 11: head: Default, loss=0.09956551, RMSE_E_per_atom=  265.85 meV, RMSE_F=  185.04 meV / A
+2026-03-06 14:49:03.148 INFO: Epoch 12: head: Default, loss=0.09895780, RMSE_E_per_atom=  265.37 meV, RMSE_F=  182.13 meV / A
+2026-03-06 14:49:22.337 INFO: Epoch 13: head: Default, loss=0.10070097, RMSE_E_per_atom=  265.66 meV, RMSE_F=  185.57 meV / A
+2026-03-06 14:49:39.554 INFO: Epoch 14: head: Default, loss=0.10157670, RMSE_E_per_atom=  266.78 meV, RMSE_F=  185.67 meV / A
+2026-03-06 14:49:55.891 INFO: Epoch 15: head: Default, loss=0.10163654, RMSE_E_per_atom=  268.56 meV, RMSE_F=  182.36 meV / A
+2026-03-06 14:50:12.336 INFO: Epoch 16: head: Default, loss=0.10012475, RMSE_E_per_atom=  266.32 meV, RMSE_F=  181.33 meV / A
+2026-03-06 14:50:29.255 INFO: Epoch 17: head: Default, loss=0.10145433, RMSE_E_per_atom=  269.40 meV, RMSE_F=  180.39 meV / A
+2026-03-06 14:50:45.714 INFO: Epoch 18: head: Default, loss=0.10098878, RMSE_E_per_atom=  265.99 meV, RMSE_F=  184.50 meV / A
+2026-03-06 14:51:02.796 INFO: Epoch 19: head: Default, loss=0.09934250, RMSE_E_per_atom=  264.64 meV, RMSE_F=  181.94 meV / A
+2026-03-06 14:51:02.797 INFO: Training complete
+2026-03-06 14:51:02.797 INFO: 
+2026-03-06 14:51:02.797 INFO: ===========RESULTS===========
+2026-03-06 14:51:02.798 INFO: Loading checkpoint: ./checkpoints/CuZr_DEV_r5.0_run-123_epoch-3.pt
+2026-03-06 14:51:02.808 INFO: Loaded Stage one model from epoch 3 for evaluation
+2026-03-06 14:51:02.808 INFO: Saving model to checkpoints/CuZr_DEV_r5.0_run-123.model
+2026-03-06 14:51:02.873 INFO: Compiling model, saving metadata to CuZr_DEV_r5.0_compiled.model
+2026-03-06 14:51:03.291 INFO: Computing metrics for training, validation, and test sets
+2026-03-06 14:51:03.292 INFO: Skipping evaluation for heads: ['pt_head']
+2026-03-06 14:51:03.292 INFO: Evaluating train_Default ...
+2026-03-06 14:51:09.631 INFO: Evaluating valid_Default ...
+2026-03-06 14:51:09.985 INFO: Error-table on TRAIN and VALID:
++---------------+---------------------+------------------+-------------------+
+|  config_type  | RMSE E / meV / atom | RMSE F / meV / A | relative F RMSE % |
++---------------+---------------------+------------------+-------------------+
+| train_Default |          276.7      |        308.8     |         18.13     |
+| valid_Default |          232.0      |        215.0     |         14.35     |
++---------------+---------------------+------------------+-------------------+
+2026-03-06 14:51:10.005 INFO: Done
