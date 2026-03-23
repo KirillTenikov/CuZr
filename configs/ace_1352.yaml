@@ -1,0 +1,22 @@
+run:
+  name: ace_1352_r7p6
+  output_root: outputs/ace
+
+data:
+  train_path: ../dataset/train.extxyz
+  valid_path: ../dataset/valid.extxyz
+  test_path: ../dataset/test.extxyz
+
+model:
+  cutoff: 7.6
+  basis_size: 1352
+
+training:
+  seed: 42
+  batch_size: 8
+  max_epochs: 200
+  lr: 0.001
+
+backend:
+  name: placeholder_python
+  entrypoint: external/train_ace_backend.py
