@@ -1,1 +1,1 @@
-"""Utilities for Cu-Zr MACE/ACE training workflows."""
+"""Cu-Zr project source package."""

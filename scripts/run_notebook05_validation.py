@@ -16,7 +16,7 @@ What it does:
 
 This version is made Docker-friendlier by:
 - resolving paths explicitly
-- allowing helper import from src/ or Notebooks/
+- importing helper modules from src/ only
 - avoiding dependence on the notebook working directory
 """
 from __future__ import annotations
@@ -30,7 +30,7 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Sequence
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-for extra in [PROJECT_ROOT, PROJECT_ROOT / "src", PROJECT_ROOT / "Notebooks"]:
+for extra in [PROJECT_ROOT, PROJECT_ROOT / "src"]:
     if str(extra) not in sys.path and extra.exists():
         sys.path.insert(0, str(extra))
 
@@ -50,7 +50,7 @@ def import_helper(module_name: str):
     try:
         return importlib.import_module(module_name)
     except ModuleNotFoundError:
-        fallback_paths = [PROJECT_ROOT / "src", PROJECT_ROOT / "Notebooks"]
+        fallback_paths = [PROJECT_ROOT / "src"]
         missing_msg = ", ".join(str(p) for p in fallback_paths)
         raise ModuleNotFoundError(
             f"Could not import helper module '{module_name}'. Looked via sys.path and expected it under: {missing_msg}"

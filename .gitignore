@@ -1,3 +1,26 @@
+
+
+# macOS
+.DS_Store
+
+# Jupyter
+.ipynb_checkpoints/
+
+
+# Project data and outputs
+outputs/
 Dataset/
-pyiron.log
 cu_zr_mlip_project/
+*.h5
+*.hdf5
+*.db
+
+# Model artifacts
+checkpoints/
+*.pt
+*.pth
+*.npz
+
+# Logs
+logs/
+*.log

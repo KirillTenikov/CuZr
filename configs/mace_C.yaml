@@ -1,6 +1,6 @@
 run:
   output_root: outputs/mace
-  name: mace_A_r6_l3_h128
+  name: mace_C_r7p6_l3_h128
 data:
   train_path: dataset/train_split.extxyz
   valid_path: dataset/valid_split.extxyz
@@ -12,7 +12,7 @@ training:
   seed: 42
   device: cuda
   default_dtype: float32
-  valid_batch_size: 8
+  valid_batch_size: 6
   weight_decay: 1e-08
   scheduler: ReduceLROnPlateau
   energy_weight: 1.0
@@ -24,11 +24,11 @@ training:
   extra_args:
     - "--eval_interval"
     - 1
-  batch_size: 8
-  max_epochs: 200
-  lr: 0.0005
+  batch_size: 6
+  max_epochs: 250
+  lr: 0.0003
 model:
   model_type: MACE
-  r_max: 6.0
+  r_max: 7.6
   num_interactions: 3
   hidden_irreps: 128x0e + 128x1o
