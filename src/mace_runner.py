@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import os
 import subprocess
+import sys
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -12,30 +14,51 @@ def build_mace_command(cfg: Dict[str, Any], run_dir: Path) -> List[str]:
     model_cfg = cfg["model"]
     data_cfg = cfg["data"]
 
-    cmd = [
-        "python",
+    python_exe = train_cfg.get("python_executable") or sys.executable
+    cmd: List[str] = [
+        python_exe,
         "-m",
         "mace.cli.run_train",
-        "--name", cfg["run"]["name"],
-        "--train_file", data_cfg["train_path"],
-        "--valid_file", data_cfg["valid_path"],
-        "--energy_key", data_cfg.get("energy_key", "energy"),
-        "--forces_key", data_cfg.get("forces_key", "forces"),
-        "--model", model_cfg.get("model_type", "MACE"),
-        "--hidden_irreps", model_cfg["hidden_irreps"],
-        "--r_max", str(model_cfg["r_max"]),
-        "--num_interactions", str(model_cfg["num_interactions"]),
-        "--max_num_epochs", str(train_cfg["max_epochs"]),
-        "--batch_size", str(train_cfg["batch_size"]),
-        "--valid_batch_size", str(train_cfg.get("valid_batch_size", train_cfg["batch_size"])),
-        "--lr", str(train_cfg["lr"]),
-        "--weight_decay", str(train_cfg.get("weight_decay", 0.0)),
-        "--seed", str(train_cfg.get("seed", 42)),
-        "--default_dtype", train_cfg.get("default_dtype", "float32"),
-        "--device", train_cfg.get("device", "cuda"),
-        "--checkpoints_dir", str(run_dir / "checkpoints"),
-        "--results_dir", str(run_dir / "artifacts"),
-        "--log_dir", str(run_dir / "logs"),
+        "--name",
+        cfg["run"]["name"],
+        "--train_file",
+        data_cfg["train_path"],
+        "--valid_file",
+        data_cfg["valid_path"],
+        "--energy_key",
+        data_cfg.get("energy_key", "energy"),
+        "--forces_key",
+        data_cfg.get("forces_key", "forces"),
+        "--model",
+        model_cfg.get("model_type", "MACE"),
+        "--hidden_irreps",
+        model_cfg["hidden_irreps"],
+        "--r_max",
+        str(model_cfg["r_max"]),
+        "--num_interactions",
+        str(model_cfg["num_interactions"]),
+        "--max_num_epochs",
+        str(train_cfg["max_epochs"]),
+        "--batch_size",
+        str(train_cfg["batch_size"]),
+        "--valid_batch_size",
+        str(train_cfg.get("valid_batch_size", train_cfg["batch_size"])),
+        "--lr",
+        str(train_cfg["lr"]),
+        "--weight_decay",
+        str(train_cfg.get("weight_decay", 0.0)),
+        "--seed",
+        str(train_cfg.get("seed", 42)),
+        "--default_dtype",
+        train_cfg.get("default_dtype", "float32"),
+        "--device",
+        train_cfg.get("device", "cuda"),
+        "--checkpoints_dir",
+        str(run_dir / "checkpoints"),
+        "--results_dir",
+        str(run_dir / "artifacts"),
+        "--log_dir",
+        str(run_dir / "logs"),
     ]
 
     if data_cfg.get("test_path"):
@@ -52,7 +75,6 @@ def build_mace_command(cfg: Dict[str, Any], run_dir: Path) -> List[str]:
         "--stress_weight": train_cfg.get("stress_weight"),
         "--patience": train_cfg.get("patience"),
     }
-
     for key, value in optional_args.items():
         if value is None:
             continue
@@ -62,6 +84,9 @@ def build_mace_command(cfg: Dict[str, Any], run_dir: Path) -> List[str]:
         else:
             cmd.extend([key, str(value)])
 
+    extra_args = train_cfg.get("extra_args", [])
+    if extra_args:
+        cmd.extend([str(x) for x in extra_args])
     return cmd
 
 
@@ -71,8 +96,9 @@ def run_mace_training(cfg: Dict[str, Any], run_dir: Path) -> int:
     ensure_dir(run_dir / "artifacts")
 
     cmd = build_mace_command(cfg, run_dir)
-    print("Launching MACE command:")
-    print(" ".join(cmd))
+    print("Launching MACE command:", flush=True)
+    print(" ".join(cmd), flush=True)
 
-    completed = subprocess.run(cmd, check=False)
+    env = os.environ.copy()
+    completed = subprocess.run(cmd, check=False, cwd=str(Path.cwd()), env=env)
     return completed.returncode

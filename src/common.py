@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import json
+import os
+import platform
 import random
 import shutil
+import sys
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -45,6 +48,7 @@ def set_seed(seed: int) -> None:
     np.random.seed(seed)
     try:
         import torch
+
         torch.manual_seed(seed)
         if torch.cuda.is_available():
             torch.cuda.manual_seed_all(seed)
@@ -75,3 +79,37 @@ def make_run_dirs(base_output: str | Path, run_name: str) -> RunPaths:
 
 def copy_config_to_run(config_path: str | Path, run_dir: str | Path) -> None:
     shutil.copy2(config_path, Path(run_dir) / "config_used.yaml")
+
+
+def runtime_metadata() -> Dict[str, Any]:
+    data: Dict[str, Any] = {
+        "python": sys.version,
+        "python_executable": sys.executable,
+        "platform": platform.platform(),
+        "cwd": str(Path.cwd()),
+        "env": {
+            k: os.environ.get(k)
+            for k in [
+                "CUDA_VISIBLE_DEVICES",
+                "OMP_NUM_THREADS",
+                "MKL_NUM_THREADS",
+                "OPENBLAS_NUM_THREADS",
+                "VECLIB_MAXIMUM_THREADS",
+                "CUZR_PROJECT_ROOT",
+                "CUZR_DATA_ROOT",
+                "CUZR_OUTPUT_ROOT",
+            ]
+            if os.environ.get(k) is not None
+        },
+    }
+    try:
+        import torch
+
+        data["torch"] = {
+            "version": getattr(torch, "__version__", None),
+            "cuda_available": torch.cuda.is_available(),
+            "cuda_device_count": torch.cuda.device_count() if torch.cuda.is_available() else 0,
+        }
+    except Exception as exc:
+        data["torch_error"] = str(exc)
+    return data
