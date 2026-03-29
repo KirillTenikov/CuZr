@@ -1,18 +1,55 @@
 run:
   output_root: outputs/ace
   name: ace_514_r7p6
+
 data:
-  train_path: dataset/train_split.extxyz
-  valid_path: dataset/valid_split.extxyz
-  test_path: dataset/test.extxyz
-training:
-  seed: 42
-  batch_size: 8
-  max_epochs: 200
-  lr: 0.001
-backend:
-  name: placeholder_python
-  entrypoint: external/train_ace_backend.py
+  train_path: dataset/train_split.pckl.gzip
+  valid_path: dataset/valid_split.pckl.gzip
+  test_path: dataset/test.pckl.gzip
+
 model:
   cutoff: 7.6
   basis_size: 514
+  elements: [Cu, Zr]
+  basis_profile: small
+  delta_spline_bins: 0.001
+  radial_base: SBessel
+  radial_parameters: [5.25]
+  dcut: 0.01
+  cutoff_function: cos
+  embedding:
+    npot: FinnisSinclairShiftedScaled
+    fs_parameters: [1, 1, 1, 0.5]
+    ndensity: 2
+
+training:
+  seed: 42
+  optimizer: BFGS
+  maxiter: 2000
+  loss:
+    kappa: 0.3
+    L1_coeffs: 1.0e-8
+    L2_coeffs: 1.0e-8
+  weighting:
+    type: EnergyBasedWeightingPolicy
+    DElow: 1.0
+    DEup: 10.0
+    DFup: 50.0
+    DE: 1.0
+    DF: 1.0
+    wlow: 0.75
+    energy: convex_hull
+    reftype: all
+  early_stopping:
+    min_relative_train_loss_per_iter: 5.0e-5
+    min_relative_test_loss_per_iter: 1.0e-5
+    early_stopping_patience: 200
+
+backend:
+  name: pacemaker
+  pacemaker_executable: pacemaker
+  evaluator: tensorpot
+  batch_size: 100
+  display_step: 50
+  prepare_data: true
+  no_fit: false
