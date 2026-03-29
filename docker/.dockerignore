@@ -1,0 +1,15 @@
+.git
+.gitignore
+.DS_Store
+__pycache__
+.ipynb_checkpoints
+Dataset
+dataset
+outputs
+cu_zr_mlip_project
+*.pt
+*.pth
+*.model
+*.h5
+*.hdf5
+*.db

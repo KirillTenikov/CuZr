@@ -1,0 +1,9 @@
+mace-torch==0.3.14
+ase==3.26.0
+numpy==2.3.3
+scipy==1.16.2
+pandas==2.3.2
+matplotlib==3.10.6
+pyyaml==6.0.2
+h5py==3.14.0
+tqdm==4.67.1
