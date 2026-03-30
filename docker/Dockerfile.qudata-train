@@ -1,31 +1,36 @@
-    FROM pytorch/pytorch:2.10.0-cuda12.6-cudnn9-devel
+FROM pytorch/pytorch:2.10.0-cuda12.6-cudnn9-devel
 
-    ENV DEBIAN_FRONTEND=noninteractive \
-        PIP_NO_CACHE_DIR=1 \
-        PYTHONDONTWRITEBYTECODE=1 \
-        PYTHONUNBUFFERED=1
+ENV DEBIAN_FRONTEND=noninteractive \
+    PIP_NO_CACHE_DIR=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    VIRTUAL_ENV=/opt/venv
 
-    WORKDIR /opt/cuzr
+WORKDIR /opt/cuzr
 
-    RUN apt-get update && apt-get install -y --no-install-recommends \
-        git \
-        tmux \
-        nano \
-        vim \
-        build-essential \
-        cmake \
-        pkg-config \
-        curl \
-        ca-certificates \
-        unzip \
-        && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    tmux \
+    nano \
+    vim \
+    build-essential \
+    cmake \
+    pkg-config \
+    curl \
+    ca-certificates \
+    unzip \
+    python3-venv \
+    && rm -rf /var/lib/apt/lists/*
 
-    COPY docker/requirements-train.txt /tmp/requirements-train.txt
+RUN python3 -m venv ${VIRTUAL_ENV}
+ENV PATH="${VIRTUAL_ENV}/bin:${PATH}"
 
-    RUN python -m pip install --upgrade pip setuptools wheel && \
-        python -m pip install -r /tmp/requirements-train.txt
+COPY docker/requirements-train.txt /tmp/requirements-train.txt
 
-    RUN python - <<'PY'
+RUN pip install --upgrade pip setuptools wheel && \
+    pip install -r /tmp/requirements-train.txt
+
+RUN python - <<'PY'
 import torch
 import ase
 import yaml
@@ -35,9 +40,9 @@ import scipy
 import h5py
 import tqdm
 import mace
-print('torch', torch.__version__)
-print('cuda available in build env:', torch.cuda.is_available())
-print('mace import ok')
+print("torch", torch.__version__)
+print("cuda available in build env:", torch.cuda.is_available())
+print("mace import ok")
 PY
 
-    CMD ["/bin/bash"]
+CMD ["/bin/bash"]
