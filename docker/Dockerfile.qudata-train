@@ -1,4 +1,4 @@
-FROM pytorch/pytorch:2.10.0-cuda12.6-cudnn9-devel
+FROM FROM pytorch/pytorch:2.11.0-cuda12.6-cudnn9-devel
 
 ENV DEBIAN_FRONTEND=noninteractive \
     PIP_NO_CACHE_DIR=1 \
