@@ -8,6 +8,7 @@ data:
   energy_key: energy
   forces_key: forces
   stress_key: stress
+  E0s: average
 training:
   seed: 42
   device: cuda
@@ -22,8 +23,8 @@ training:
   ema_decay: 0.99
   patience: 20
   extra_args:
-    - "--eval_interval"
-    - 1
+  - --eval_interval
+  - 1
   batch_size: 8
   max_epochs: 200
   lr: 0.0005
