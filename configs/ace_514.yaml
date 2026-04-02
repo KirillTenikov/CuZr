@@ -3,9 +3,9 @@ run:
   name: ace_514_r7p6
 
 data:
-  train_path: dataset/train_split.pckl.gzip
-  valid_path: dataset/valid_split.pckl.gzip
-  test_path: dataset/test.pckl.gzip
+  train_path: ../../data/train_split.pckl.gzip
+  valid_path: ../../data/valid_split.pckl.gzip
+  test_path: ../../data/test.pckl.gzip
 
 model:
   cutoff: 7.6
