@@ -1,7 +1,6 @@
 run:
   output_root: outputs/mace
   name: mace_B_r6_l4_h128
-
 data:
   train_path: ../../data/train_split.extxyz
   valid_path: ../../data/valid_split.extxyz
@@ -9,13 +8,12 @@ data:
   energy_key: energy
   forces_key: forces
   stress_key: stress
-
 training:
   seed: 42
   device: cuda
   default_dtype: float32
-  valid_batch_size: 8
-  weight_decay: 1e-08
+  valid_batch_size: 12
+  weight_decay: 1.0e-08
   scheduler: ReduceLROnPlateau
   energy_weight: 1.0
   forces_weight: 100.0
@@ -24,14 +22,13 @@ training:
   ema_decay: 0.99
   patience: 20
   extra_args:
-    - "--eval_interval"
-    - 1
-    - "--E0s"
-    - "average"
-  batch_size: 8
+  - --eval_interval
+  - 1
+  - --E0s
+  - average
+  batch_size: 12
   max_epochs: 250
   lr: 0.0005
-
 model:
   model_type: MACE
   r_max: 6.0
