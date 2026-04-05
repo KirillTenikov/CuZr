@@ -87,8 +87,8 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--glass-rep",
-        default="5,5,5",
-        help="Repetition for the B2 seed before randomizing chemistry. Default 5,5,5 gives 250 atoms.",
+        default="10,10,25",
+        help="Replication for amorphous seed. Default 10,10,25 gives 5000 atoms.",
     )
     parser.add_argument(
         "--seed",
