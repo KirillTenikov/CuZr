@@ -27,7 +27,7 @@ training:
   optimizer: BFGS
   maxiter: 2000
   loss:
-    kappa: 0.3
+    kappa: 0.95
     L1_coeffs: 1.0e-8
     L2_coeffs: 1.0e-8
   weighting:
