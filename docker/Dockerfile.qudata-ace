@@ -1,0 +1,60 @@
+FROM nvidia/cuda:12.8.1-cudnn-devel-ubuntu22.04
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    PIP_NO_CACHE_DIR=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    VIRTUAL_ENV=/opt/ace-venv
+
+WORKDIR /opt/cuzr
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    tmux \
+    nano \
+    vim \
+    build-essential \
+    cmake \
+    pkg-config \
+    curl \
+    ca-certificates \
+    unzip \
+    python3 \
+    python3-venv \
+    python3-pip \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN python3 -m venv ${VIRTUAL_ENV}
+ENV PATH="${VIRTUAL_ENV}/bin:${PATH}"
+
+COPY docker/requirements-ace-runtime.txt /tmp/requirements-ace-runtime.txt
+
+ARG TENSORPOTENTIAL_REPO=https://github.com/ICAMS/TensorPotential.git
+ARG TENSORPOTENTIAL_REF=main
+ARG PYACE_REPO=https://github.com/ICAMS/python-ace.git
+ARG PYACE_REF=master
+ARG TENSORFLOW_PKG=tensorflow[and-cuda]
+
+RUN python -m pip install --upgrade pip setuptools wheel && \
+    python -m pip install -r /tmp/requirements-ace-runtime.txt && \
+    python -m pip install "${TENSORFLOW_PKG}" && \
+    python -m pip install "protobuf==3.20.*"
+
+RUN git clone --branch "${TENSORPOTENTIAL_REF}" --depth 1 "${TENSORPOTENTIAL_REPO}" /opt/TensorPotential && \
+    python -m pip install --upgrade /opt/TensorPotential
+
+RUN git clone --branch "${PYACE_REF}" --depth 1 "${PYACE_REPO}" /opt/python-ace && \
+    python -m pip install --upgrade /opt/python-ace && \
+    python -m pip install "protobuf==3.20.*"
+
+RUN python - <<'PY'
+import importlib
+mods = ["tensorflow", "tensorpotential", "pandas", "numpy", "ase"]
+for m in mods:
+    mod = importlib.import_module(m)
+    print(m, getattr(mod, "__version__", "no __version__"))
+PY
+
+RUN bash -lc 'command -v pacemaker && pacemaker --help >/dev/null'
+
+CMD ["/bin/bash"]

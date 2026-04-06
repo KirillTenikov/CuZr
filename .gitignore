@@ -61,3 +61,4 @@ data/
 .env
 .venv/
 venv/
+Notebooks/
