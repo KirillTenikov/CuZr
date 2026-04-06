@@ -29,6 +29,7 @@ logs/
 results/
 checkpoints/
 notebook06_outputs/
+CuZr_results/
 
 # -----------------------------
 # Model artifacts
