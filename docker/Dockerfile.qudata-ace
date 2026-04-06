@@ -4,8 +4,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PIP_NO_CACHE_DIR=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    VIRTUAL_ENV=/opt/ace-venv \
-    CMAKE_BUILD_PARALLEL_LEVEL=4
+    VIRTUAL_ENV=/opt/ace-venv
 
 WORKDIR /opt/cuzr
 
@@ -39,17 +38,18 @@ ARG PYACE_REPO=https://github.com/ICAMS/python-ace.git
 ARG PYACE_REF=master
 ARG TENSORFLOW_PKG=tensorflow[and-cuda]
 
-RUN python -m pip install --upgrade pip setuptools wheel \
-    cmake ninja pybind11 scikit-build-core
-
-RUN python -m pip install "${TENSORFLOW_PKG}" && \
+# Keep setuptools below 82 because newer versions removed pkg_resources,
+# while the pacemaker entry point from python-ace still imports it.
+RUN python -m pip install --upgrade pip "setuptools<82" wheel && \
+    python -m pip install "${TENSORFLOW_PKG}" && \
     python -m pip install -r /tmp/requirements-ace-runtime.txt
 
 RUN git clone --branch "${TENSORPOTENTIAL_REF}" --depth 1 "${TENSORPOTENTIAL_REPO}" /opt/TensorPotential && \
     python -m pip install --verbose --no-build-isolation /opt/TensorPotential
 
 RUN git clone --branch "${PYACE_REF}" --depth 1 "${PYACE_REPO}" /opt/python-ace && \
-    python -m pip install --verbose --no-build-isolation /opt/python-ace
+    python -m pip install --verbose --no-build-isolation /opt/python-ace && \
+    python -m pip install "setuptools<82"
 
 RUN python - <<'PY'
 import importlib
