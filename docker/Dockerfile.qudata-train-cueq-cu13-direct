@@ -1,0 +1,27 @@
+FROM kseina89/cuzr-train:qudata-v1
+
+SHELL ["/bin/bash", "-lc"]
+
+# Exact cuEquivariance wheel URLs (Python 3.12, Linux x86_64, CUDA 13)
+ARG CUEQ_WHL="https://files.pythonhosted.org/packages/25/70/7bfedcdd0223357930f5312c9ac5d6cc5fea88b73372c4087ffc3655a9e3/cuequivariance-0.9.1-py3-none-any.whl"
+ARG CUEQ_TORCH_WHL="https://files.pythonhosted.org/packages/35/cd/fa977d329f2d2b1da474625de8d8ef52be8803d85d9a28f74113bedc79c1/cuequivariance_torch-0.9.1-py3-none-any.whl"
+ARG CUEQ_OPS_WHL="https://files.pythonhosted.org/packages/dc/78/cb05abff3e94cae7c28c29e76dc3b1d961385650002fa57147fc42e0b5e2/cuequivariance_ops_torch_cu13-0.9.1-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl"
+
+RUN /opt/venv/bin/python -m pip install --upgrade pip setuptools wheel && \
+    /opt/venv/bin/python -m pip install --no-cache-dir \
+      "${CUEQ_WHL}" \
+      "${CUEQ_TORCH_WHL}" \
+      "${CUEQ_OPS_WHL}"
+
+# Build-time smoke test: do NOT import cuequivariance_ops_torch here,
+# because it requires NVIDIA driver libraries (libcuda.so.1) that are only
+# available at container runtime on a GPU-enabled machine.
+RUN /opt/venv/bin/python - <<'PY'
+import torch
+print("torch", torch.__version__)
+import cuequivariance
+import cuequivariance_torch
+print("build-time imports OK")
+PY
+
+CMD ["/bin/bash"]
