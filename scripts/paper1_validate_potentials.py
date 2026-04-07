@@ -2,24 +2,27 @@
 """
 Run Paper 1 validation workflow for multiple Cu-Zr potentials.
 
-Rewritten version with stronger amorphous-phase coverage.
+This script is the main validation driver for Paper 1. It compares crystalline,
+amorphous, and short-time dynamical readiness metrics across Cu-Zr MLIPs and EAM
+baselines. It also includes a small MD-DMS-oriented precheck so that Paper 1
+outputs can serve as a clean bridge toward the oscillatory-shear workflow used
+in Paper 2.
 
-Main differences from the previous script:
-- validates glasses at three representative compositions:
-    * Cu64Zr36
-    * Cu50Zr50
-    * Cu36Zr64
-- keeps the crystalline validation blocks:
-    * smoke tests
-    * EOS for FCC Cu / HCP Zr / B2 CuZr
-    * local bulk modulus estimate
-    * vacancy formation energies for FCC Cu / HCP Zr
-- runs melt -> quench -> minimize -> NVE for each glass composition
-- writes composition-aware RDF and approximate S(q) outputs
-- produces compact summary tables that are easier to compare across models
+Main blocks:
+- smoke tests
+- EOS for FCC Cu / HCP Zr / B2 CuZr
+- local bulk modulus estimate
+- vacancy formation energies for FCC Cu / HCP Zr
+- melt -> quench -> minimize -> NVE for each selected glass composition
+- composition-aware RDF and approximate S(q)
+- compact Paper 1 summary table
+- short MD-DMS precheck:
+    * sinusoidal xy shear on a minimized glass
+    * global shear-stress / strain signal export
+    * per-atom stress export for downstream Fourier / phase analysis
 
 The script stays conservative with dependencies and uses the same helper-module API
-as the original Notebook 05 conversion.
+as the existing Cu-Zr pyiron + LAMMPS workflow.
 """
 from __future__ import annotations
 
@@ -67,10 +70,10 @@ def import_helper(module_name: str):
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Run Notebook 05 validation as a Python script")
+    parser = argparse.ArgumentParser(description="Run the Paper 1 Cu-Zr potential validation workflow")
     parser.add_argument("--mode", choices=["dev", "prod"], default="dev")
     parser.add_argument("--project-path", default="../cu_zr_mlip_project", help="pyiron project path")
-    parser.add_argument("--results-dir", default="outputs/notebook05_validation", help="Directory for results")
+    parser.add_argument("--results-dir", default="outputs/paper1_validation", help="Directory for results")
     parser.add_argument("--pots", default="all")
     parser.add_argument("--include-ace", action="store_true")
     parser.add_argument("--cores", type=int, default=None)
@@ -95,6 +98,53 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=42,
         help="Random seed for glass chemical decoration",
+    )
+
+    parser.add_argument(
+        "--skip-mddms-precheck",
+        action="store_true",
+        help="Skip the short MD-DMS readiness precheck block.",
+    )
+    parser.add_argument(
+        "--mddms-precheck-composition",
+        default="Cu64Zr36",
+        help="Glass composition ID used for the MD-DMS precheck.",
+    )
+    parser.add_argument(
+        "--mddms-temperature-K",
+        type=float,
+        default=300.0,
+        help="Target temperature for the MD-DMS precheck.",
+    )
+    parser.add_argument(
+        "--mddms-strain-amplitude",
+        type=float,
+        default=0.01,
+        help="Sinusoidal shear-strain amplitude for the MD-DMS precheck.",
+    )
+    parser.add_argument(
+        "--mddms-period-ps",
+        type=float,
+        default=50.0,
+        help="Oscillation period in ps for the MD-DMS precheck.",
+    )
+    parser.add_argument(
+        "--mddms-cycles",
+        type=int,
+        default=2,
+        help="Number of oscillation cycles for the MD-DMS precheck.",
+    )
+    parser.add_argument(
+        "--mddms-stress-every",
+        type=int,
+        default=10,
+        help="Step spacing for global stress/strain output during the MD-DMS precheck.",
+    )
+    parser.add_argument(
+        "--mddms-atom-dump-every",
+        type=int,
+        default=250,
+        help="Step spacing for per-atom dump output during the MD-DMS precheck.",
     )
     return parser.parse_args()
 
@@ -647,6 +697,124 @@ def ncl_validation_pipeline(
     return out
 
 
+
+def run_mddms_precheck(
+    pr: Project,
+    structure: Atoms,
+    composition_id: str,
+    pot_spec: Dict[str, Any],
+    mode_dev: bool,
+    cores: int,
+    temperature_K: float,
+    strain_amplitude: float,
+    period_ps: float,
+    cycles: int,
+    stress_every: int,
+    atom_dump_every: int,
+) -> Dict[str, Any]:
+    """
+    Run a short oscillatory-shear readiness test on a minimized glass.
+
+    This is intentionally much smaller than the full Paper 2 MD-DMS production
+    protocol. The goal is just to verify that a potential can:
+      1. survive sinusoidal xy shear,
+      2. produce a clean global stress/strain signal,
+      3. export per-atom stress tensors for later Fourier/phase analysis.
+    """
+    timestep_fs = 1.0
+    period_steps = int(round(period_ps * 1000.0 / timestep_fs))
+    total_steps = int(cycles * period_steps)
+    if period_steps <= 0 or total_steps <= 0:
+        raise ValueError("MD-DMS precheck needs positive period_steps and total_steps")
+
+    job_name = jname("mddms_precheck", pot_spec, mode_dev, composition_id=composition_id)
+    job = cz.make_lammps_job(pr, job_name, structure, pot_spec, delete_existing=True, cores=cores)
+    job.calc_md(
+        temperature=temperature_K,
+        n_ionic_steps=total_steps,
+        time_step=timestep_fs,
+    )
+
+    # Conservative neighbor / thermo settings.
+    job.input.control["variable___thermotime"] = f"equal {max(10, int(stress_every))}"
+    job.input.control["neighbor"] = "1.0 bin"
+    job.input.control["neigh_modify"] = "every 10 delay 0 check yes"
+
+    # Sinusoidal xy shear: gamma(t) = A * sin(2*pi*step/period_steps)
+    job.input.control["variable___mddms_A"] = f"equal {float(strain_amplitude):.8f}"
+    job.input.control["variable___mddms_period"] = f"equal {int(period_steps)}"
+    job.input.control["variable___mddms_gamma"] = "equal v_mddms_A*sin(2.0*PI*step/v_mddms_period)"
+    job.input.control["fix___mddms_deform"] = "all deform 1 xy variable v_mddms_gamma remap x units box"
+
+    # Per-atom stress and Voronoi volume for downstream Paper 2 analysis.
+    job.input.control["compute___mddms_stress"] = "all stress/atom NULL"
+    job.input.control["compute___mddms_voronoi"] = "all voronoi/atom"
+
+    # Global stress / strain signal.
+    job.input.control["fix___mddms_print"] = (
+        f'all print {int(stress_every)} "${{step}} ${{time}} ${{pxy}} ${{v_mddms_gamma}}" '
+        'file system_stress_strain.dat screen no'
+    )
+
+    # Lightweight per-atom dump for Fourier / phase post-processing dry-run.
+    job.input.control["variable___dumptime"] = f"equal {int(atom_dump_every)}"
+    job.input.control["dump___mddms_atoms"] = (
+        "all custom ${dumptime} dump.mddms_precheck.lammpstrj "
+        "id type xsu ysu zsu vx vy vz "
+        "c_mddms_voronoi "
+        "c_mddms_stress[1] c_mddms_stress[2] c_mddms_stress[3] "
+        "c_mddms_stress[4] c_mddms_stress[5] c_mddms_stress[6]"
+    )
+    job.input.control["dump_modify___mddms_atoms"] = "sort id"
+
+    job.run()
+
+    wd = Path(job.working_directory)
+    stress_file = wd / "system_stress_strain.dat"
+    atom_dump = wd / "dump.mddms_precheck.lammpstrj"
+
+    out = {
+        "pot_id": pot_spec["id"],
+        "composition_id": composition_id,
+        "job_name": job_name,
+        "temperature_K": float(temperature_K),
+        "strain_amplitude": float(strain_amplitude),
+        "period_ps": float(period_ps),
+        "cycles": int(cycles),
+        "total_steps": int(total_steps),
+        "stress_every": int(stress_every),
+        "atom_dump_every": int(atom_dump_every),
+        "working_directory": str(wd),
+        "stress_file": str(stress_file),
+        "atom_dump_file": str(atom_dump),
+        "stress_file_exists": stress_file.exists(),
+        "atom_dump_exists": atom_dump.exists(),
+        "stress_file_size_B": stress_file.stat().st_size if stress_file.exists() else np.nan,
+        "atom_dump_size_B": atom_dump.stat().st_size if atom_dump.exists() else np.nan,
+        "E_last_eV": get_last_energy(job),
+        "T_last_K": get_last_temp(job),
+        "P_last_bar_like": get_last_press(job),
+    }
+
+    # Small sanity read of the global stress file if available.
+    if stress_file.exists():
+        try:
+            sig = pd.read_csv(
+                stress_file,
+                delim_whitespace=True,
+                header=None,
+                names=["step", "time_ps", "pxy_bar", "gamma_xy"],
+            )
+            out["signal_rows"] = int(len(sig))
+            out["gamma_abs_max"] = float(np.max(np.abs(sig["gamma_xy"]))) if len(sig) else np.nan
+            out["pxy_abs_max"] = float(np.max(np.abs(sig["pxy_bar"]))) if len(sig) else np.nan
+        except Exception as exc:
+            out["signal_rows"] = np.nan
+            out["signal_read_error"] = str(exc)
+
+    return out
+
+
 def main() -> int:
     global cz
     args = parse_args()
@@ -730,6 +898,14 @@ def main() -> int:
         "neigh_every": neigh_every,
         "project_tag": args.project_tag,
         "helper_module": args.helper_module,
+        "skip_mddms_precheck": bool(args.skip_mddms_precheck),
+        "mddms_precheck_composition": args.mddms_precheck_composition,
+        "mddms_temperature_K": float(args.mddms_temperature_K),
+        "mddms_strain_amplitude": float(args.mddms_strain_amplitude),
+        "mddms_period_ps": float(args.mddms_period_ps),
+        "mddms_cycles": int(args.mddms_cycles),
+        "mddms_stress_every": int(args.mddms_stress_every),
+        "mddms_atom_dump_every": int(args.mddms_atom_dump_every),
     }
     save_json(settings, results_dir / "run_settings.json")
 
@@ -804,6 +980,47 @@ def main() -> int:
             )
     ncl_df = pd.DataFrame(ncl_rows)
     save_dataframe(ncl_df, results_dir / "ncl_validation.csv")
+
+    mddms_rows = []
+    if not args.skip_mddms_precheck:
+        precheck_cid = args.mddms_precheck_composition.strip()
+        if precheck_cid not in glass_composition_ids:
+            print(
+                f"MD-DMS precheck composition '{precheck_cid}' was not requested in --glass-compositions; using '{glass_composition_ids[0]}' instead.",
+                flush=True,
+            )
+            precheck_cid = glass_composition_ids[0]
+        for p in pots_to_run:
+            print(f"MD-DMS PRECHECK: {p['id']} / {precheck_cid}", flush=True)
+            try:
+                jmin = pr.load(jname("glass_min", p, mode_dev, composition_id=precheck_cid))
+                s_pre = safe_last_structure(jmin)
+                mddms_rows.append(
+                    run_mddms_precheck(
+                        pr=pr,
+                        structure=s_pre,
+                        composition_id=precheck_cid,
+                        pot_spec=p,
+                        mode_dev=mode_dev,
+                        cores=cores,
+                        temperature_K=args.mddms_temperature_K,
+                        strain_amplitude=args.mddms_strain_amplitude,
+                        period_ps=args.mddms_period_ps,
+                        cycles=args.mddms_cycles,
+                        stress_every=args.mddms_stress_every,
+                        atom_dump_every=args.mddms_atom_dump_every,
+                    )
+                )
+            except Exception as exc:
+                mddms_rows.append(
+                    {
+                        "pot_id": p["id"],
+                        "composition_id": precheck_cid,
+                        "job_name": jname("mddms_precheck", p, mode_dev, composition_id=precheck_cid),
+                        "error": str(exc),
+                    }
+                )
+    save_dataframe(pd.DataFrame(mddms_rows), results_dir / "mddms_precheck_summary.csv")
 
     structure_map = {"FCC_Cu": fcc_cu, "HCP_Zr": hcp_zr, "B2_CuZr": b2_cuzr}
     bulk_rows = []
@@ -926,6 +1143,9 @@ def main() -> int:
                     "nve_energy_shift_per_atom_eV": get_nve_drift_for_potential_and_composition(pid, composition_id, ncl_df),
                     "rdf_available": (pid, composition_id) in rdf_store,
                     "sq_available": (pid, composition_id) in sq_store,
+                    "mddms_precheck_available": bool(
+                        len(pd.DataFrame(mddms_rows)[(pd.DataFrame(mddms_rows)["pot_id"] == pid) & (pd.DataFrame(mddms_rows)["composition_id"] == composition_id)])
+                    ) if len(mddms_rows) else False,
                 }
             )
     paper1_validation_df = pd.DataFrame(summary_rows)
