@@ -26,6 +26,7 @@ training:
   - 1
   - --E0s
   - average
+  - --enable_cueq
   batch_size: 8
   max_epochs: 250
   lr: 0.0003
