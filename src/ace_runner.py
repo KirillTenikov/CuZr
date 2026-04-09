@@ -3,7 +3,6 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
-import sys
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -34,6 +33,7 @@ def build_ace_commands(cfg: Dict[str, Any], run_dir: Path) -> List[List[str]]:
 
     pacemaker_exe = backend_cfg.get("pacemaker_executable", "pacemaker")
     input_yaml = run_dir / "pacemaker_input.yaml"
+
     commands: List[List[str]] = []
 
     if backend_cfg.get("prepare_data", True):
@@ -49,6 +49,7 @@ def build_ace_commands(cfg: Dict[str, Any], run_dir: Path) -> List[List[str]]:
 
 def collect_pacemaker_outputs(run_dir: Path) -> None:
     artifacts = ensure_dir(run_dir / "artifacts")
+
     _copy_if_exists(run_dir / "log.txt", artifacts / "log.txt")
     _copy_if_exists(run_dir / "output_potential.yaml", artifacts / "output_potential.yaml")
     _copy_if_exists(

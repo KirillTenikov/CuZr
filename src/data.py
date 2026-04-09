@@ -25,7 +25,9 @@ def _resolve_dataset_path(raw: str | Path | None, config_dir: Path) -> Optional[
     return direct
 
 
-def resolve_dataset_paths(cfg: Dict[str, Any], config_dir: str | Path | None = None) -> Dict[str, Optional[Path]]:
+def resolve_dataset_paths(
+    cfg: Dict[str, Any], config_dir: str | Path | None = None
+) -> Dict[str, Optional[Path]]:
     data_cfg = cfg["data"]
     base = Path(config_dir or Path.cwd()).resolve()
     return {
@@ -35,9 +37,12 @@ def resolve_dataset_paths(cfg: Dict[str, Any], config_dir: str | Path | None = N
     }
 
 
-def normalize_config_dataset_paths(cfg: Dict[str, Any], config_dir: str | Path | None = None) -> Dict[str, Any]:
+def normalize_config_dataset_paths(
+    cfg: Dict[str, Any], config_dir: str | Path | None = None
+) -> Dict[str, Any]:
     cfg = dict(cfg)
     cfg["data"] = dict(cfg["data"])
+
     resolved = resolve_dataset_paths(cfg, config_dir=config_dir)
     cfg["data"]["train_path"] = str(resolved["train"])
     cfg["data"]["valid_path"] = str(resolved["valid"])

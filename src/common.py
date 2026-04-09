@@ -108,7 +108,9 @@ def runtime_metadata() -> Dict[str, Any]:
         data["torch"] = {
             "version": getattr(torch, "__version__", None),
             "cuda_available": torch.cuda.is_available(),
-            "cuda_device_count": torch.cuda.device_count() if torch.cuda.is_available() else 0,
+            "cuda_device_count": torch.cuda.device_count()
+            if torch.cuda.is_available()
+            else 0,
         }
     except Exception as exc:
         data["torch_error"] = str(exc)

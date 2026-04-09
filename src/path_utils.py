@@ -8,8 +8,8 @@ from typing import Iterable, Optional
 def find_repo_root(start: str | Path | None = None) -> Path:
     """Best-effort detection of the project root.
 
-    Prefers explicit env var CUZR_PROJECT_ROOT, then walks upward looking for
-    common repo markers.
+    Prefers explicit env var CUZR_PROJECT_ROOT, then walks upward looking
+    for common repo markers.
     """
     env_root = os.environ.get("CUZR_PROJECT_ROOT")
     if env_root:
@@ -35,6 +35,7 @@ def resolve_path(
         path = (base / path).resolve()
     else:
         path = path.resolve()
+
     if must_exist and not path.exists():
         raise FileNotFoundError(f"Path not found: {path}")
     return path
