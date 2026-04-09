@@ -51,5 +51,5 @@ backend:
   evaluator: tensorpot
   batch_size: 100
   display_step: 50
-  prepare_data: true
+  prepare_data: false
   no_fit: false
