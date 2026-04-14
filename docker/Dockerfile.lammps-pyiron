@@ -132,9 +132,9 @@ RUN export PKG_CONFIG_PATH="${MAMBA_ROOT_PREFIX}/envs/sim/lib/pkgconfig:${PKG_CO
 # Use modest parallelism to reduce peak disk and memory pressure on Build Cloud.
 RUN export PKG_CONFIG_PATH="${MAMBA_ROOT_PREFIX}/envs/sim/lib/pkgconfig:${PKG_CONFIG_PATH}" \
     && export CMAKE_PREFIX_PATH="${MAMBA_ROOT_PREFIX}/envs/sim:${CMAKE_PREFIX_PATH}" \
-    && micromamba run -n sim cmake --build . --parallel 2 --verbose \
+    && micromamba run -n sim cmake --build . --parallel 2  \
     && micromamba run -n sim cmake --install . \
-    && micromamba run -n sim cmake --build . --target install-python --parallel 1 --verbose
+    && micromamba run -n sim cmake --build . --target install-python --parallel 1 
 
 ENV PATH=/opt/lammps-install/bin:${MAMBA_ROOT_PREFIX}/envs/sim/bin:${PATH}
 ENV LD_LIBRARY_PATH=/opt/lammps-install/lib:${MAMBA_ROOT_PREFIX}/envs/sim/lib
