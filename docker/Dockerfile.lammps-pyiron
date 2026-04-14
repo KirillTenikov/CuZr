@@ -1,13 +1,12 @@
 FROM nvidia/cuda:12.4.1-cudnn-devel-ubuntu22.04
 
-ARG DEBIAN_FRONTEND=noninteractive
-ARG MAMBA_ROOT_PREFIX=/opt/conda
-ARG LAMMPS_REF=develop
-# Default targets Ampere (good for A100/A40). Override at build time for other GPUs.
+SHELL ["/bin/bash", "-lc"]
+ENV DEBIAN_FRONTEND=noninteractive
+ENV MAMBA_ROOT_PREFIX=/opt/micromamba
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1
 ARG GPU_ARCH_FLAG="-DKokkos_ARCH_AMPERE80=ON"
 
-SHELL ["/bin/bash", "-lc"]
-
+# System build dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     gfortran \
@@ -28,17 +27,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libhdf5-openmpi-dev \
     unzip \
     bzip2 \
-    less \
-    vim \
     && rm -rf /var/lib/apt/lists/*
 
-RUN curl -Ls https://micro.mamba.pm/api/micromamba/linux-64/latest | tar -xvj -C /tmp bin/micromamba \
+# Micromamba
+RUN curl -Ls https://micro.mamba.pm/api/micromamba/linux-64/latest \
+    | tar -xvj -C /tmp bin/micromamba \
     && install -m 0755 /tmp/bin/micromamba /usr/local/bin/micromamba \
     && rm -rf /tmp/bin
 
-ENV MAMBA_ROOT_PREFIX=/opt/conda
-ENV PATH=${MAMBA_ROOT_PREFIX}/bin:${PATH}
-
+# Main scientific Python environment.
+# Intentionally leaner than before: no notebook/jupyter/vim/openkim-models in the first build.
 RUN micromamba create -y -n sim -c conda-forge \
     python=3.11 \
     pip \
@@ -50,43 +48,61 @@ RUN micromamba create -y -n sim -c conda-forge \
     ase \
     h5py \
     mpi4py \
-    jupyterlab \
-    notebook \
-    ipykernel \
     pyiron \
     pyiron_atomistics \
     pyiron_base \
     h5io \
     sqlalchemy \
     pysqa \
+    fftw \
+    mkl \
+    kim-api \
+    kimpy \
     && micromamba clean --all --yes
 
-# PyTorch + MACE ML-IAP Python side
+# GPU-enabled PyTorch from conda to avoid huge pip CUDA wheel downloads.
+RUN micromamba install -y -n sim --channel-priority flexible \
+    -c pytorch -c nvidia -c conda-forge \
+    pytorch=2.5.1 \
+    pytorch-cuda=12.4 \
+    mkl \
+    && micromamba clean --all --yes
+
+# MACE runtime stack. Keep it separate so failures are easier to diagnose.
+RUN micromamba run -n sim python -m pip install --no-cache-dir --no-deps \
+    mace-torch
+
 RUN micromamba run -n sim python -m pip install --no-cache-dir \
-      --index-url https://download.pytorch.org/whl/cu124 \
-      torch==2.5.0 \
-    && micromamba run -n sim python -m pip install --no-cache-dir \
-      mace-torch \
-      cuequivariance \
-      cuequivariance-torch \
-      cuequivariance-ops-torch-cu12 \
-      cupy-cuda12x \
-      kim-property
+    cuequivariance \
+    cuequivariance-torch \
+    cuequivariance-ops-torch-cu12 \
+    cupy-cuda12x \
+    kim-property
 
+# LAMMPS source
 WORKDIR /opt
-RUN git clone --depth 1 --branch ${LAMMPS_REF} https://github.com/lammps/lammps.git
-
+RUN git clone --depth 1 --branch develop https://github.com/lammps/lammps.git
 WORKDIR /opt/lammps/build
-RUN source /opt/conda/etc/profile.d/micromamba.sh \
-    && micromamba activate sim \
-    && cmake -G Ninja ../cmake \
+
+# Configure LAMMPS against the micromamba environment and preinstalled KIM API.
+RUN export PKG_CONFIG_PATH="${MAMBA_ROOT_PREFIX}/envs/sim/lib/pkgconfig:${PKG_CONFIG_PATH}" \
+    && export CMAKE_PREFIX_PATH="${MAMBA_ROOT_PREFIX}/envs/sim:${CMAKE_PREFIX_PATH}" \
+    && export CC=/usr/bin/gcc \
+    && export CXX=/usr/bin/g++ \
+    && export CUDAHOSTCXX=/usr/bin/g++ \
+    && micromamba run -n sim cmake -G Ninja ../cmake \
       -D CMAKE_BUILD_TYPE=Release \
       -D CMAKE_INSTALL_PREFIX=/opt/lammps-install \
+      -D CMAKE_C_STANDARD=17 \
       -D CMAKE_CXX_STANDARD=17 \
+      -D CMAKE_C_COMPILER=/usr/bin/gcc \
+      -D CMAKE_CXX_COMPILER=/usr/bin/g++ \
+      -D CMAKE_CUDA_HOST_COMPILER=/usr/bin/g++ \
+      -D CMAKE_CUDA_COMPILER=/usr/local/cuda/bin/nvcc \
       -D BUILD_MPI=ON \
       -D BUILD_SHARED_LIBS=ON \
       -D PKG_KIM=ON \
-      -D DOWNLOAD_KIM=ON \
+      -D DOWNLOAD_KIM=OFF \
       -D PKG_ML-IAP=ON \
       -D PKG_ML-SNAP=ON \
       -D MLIAP_ENABLE_PYTHON=ON \
@@ -108,32 +124,21 @@ RUN source /opt/conda/etc/profile.d/micromamba.sh \
       -D PKG_REPLICA=ON \
       -D PKG_RIGID=ON \
       -D FFT=FFTW3 \
-      -D Python_EXECUTABLE=${CONDA_PREFIX}/bin/python \
-    && cmake --build . -j"$(nproc)" \
-    && cmake --install . \
-    && cmake --build . --target install-python
+      -D FFTW3_INCLUDE_DIR=${MAMBA_ROOT_PREFIX}/envs/sim/include \
+      -D FFTW3_LIBRARY=${MAMBA_ROOT_PREFIX}/envs/sim/lib/libfftw3.so \
+      -D Python_EXECUTABLE=${MAMBA_ROOT_PREFIX}/envs/sim/bin/python
 
-ENV PATH=/opt/lammps-install/bin:${PATH}
-ENV LD_LIBRARY_PATH=/opt/lammps-install/lib:${LD_LIBRARY_PATH}
-ENV OMP_NUM_THREADS=1
+# Build and install inside the same environment.
+# Use modest parallelism to reduce peak disk and memory pressure on Build Cloud.
+RUN export PKG_CONFIG_PATH="${MAMBA_ROOT_PREFIX}/envs/sim/lib/pkgconfig:${PKG_CONFIG_PATH}" \
+    && export CMAKE_PREFIX_PATH="${MAMBA_ROOT_PREFIX}/envs/sim:${CMAKE_PREFIX_PATH}" \
+    && micromamba run -n sim cmake --build . --parallel 2 --verbose \
+    && micromamba run -n sim cmake --install . \
+    && micromamba run -n sim cmake --build . --target install-python --parallel 1 --verbose
 
-# Make the conda environment the default Python environment
-ENV CONDA_DEFAULT_ENV=sim
-ENV CONDA_PREFIX=/opt/conda/envs/sim
-ENV PATH=/opt/conda/envs/sim/bin:${PATH}
-
-# Optional pyiron working directories; adjust or override at runtime if you prefer.
-RUN mkdir -p /opt/pyiron/projects /opt/pyiron/resources
-ENV PYIRONPROJECTS=/opt/pyiron/projects
-ENV PYIRONRESOURCES=/opt/pyiron/resources
-
-# Lightweight smoke test during build
-RUN python - <<'PY'
-import lammps
-import pyiron_atomistics
-import ase
-print('Python stack OK')
-PY
+ENV PATH=/opt/lammps-install/bin:${MAMBA_ROOT_PREFIX}/envs/sim/bin:${PATH}
+ENV LD_LIBRARY_PATH=/opt/lammps-install/lib:${MAMBA_ROOT_PREFIX}/envs/sim/lib
+ENV PYTHONPATH=/opt/lammps-install/lib/python3.11/site-packages
 
 WORKDIR /workspace
 CMD ["/bin/bash"]

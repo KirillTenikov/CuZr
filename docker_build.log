@@ -1,0 +1,605 @@
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile.lammps-pyiron
+#1 transferring dockerfile: 3.90kB done
+#1 DONE 0.0s
+
+#2 [auth] nvidia/cuda:pull token for registry-1.docker.io
+#2 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/nvidia/cuda:12.4.1-cudnn-devel-ubuntu22.04
+#3 DONE 1.4s
+
+#4 [internal] load .dockerignore
+#4 transferring context: 237B done
+#4 DONE 0.0s
+
+#5 [ 1/11] FROM docker.io/nvidia/cuda:12.4.1-cudnn-devel-ubuntu22.04@sha256:622e78a1d02c0f90ed900e3985d6c975d8e2dc9ee5e61643aed587dcf9129f42
+#5 DONE 0.0s
+
+#6 [ 2/11] RUN apt-get update && apt-get install -y --no-install-recommends     build-essential     gfortran     git     wget     curl     ca-certificates     pkg-config     cmake     ninja-build     openmpi-bin     libopenmpi-dev     libfftw3-dev     libcurl4-openssl-dev     libjpeg-dev     libpng-dev     libhdf5-dev     libhdf5-openmpi-dev     unzip     bzip2     less     vim     && rm -rf /var/lib/apt/lists/*
+#6 CACHED
+
+#7 [ 3/11] RUN curl -Ls https://micro.mamba.pm/api/micromamba/linux-64/latest | tar -xvj -C /tmp bin/micromamba     && install -m 0755 /tmp/bin/micromamba /usr/local/bin/micromamba     && rm -rf /tmp/bin
+#7 CACHED
+
+#8 [ 4/11] RUN micromamba create -y -n sim -c conda-forge     python=3.11     pip     cython     "numpy<2"     scipy     pandas     fftw     matplotlib     ase     h5py     mpi4py     jupyterlab     notebook     ipykernel     pyiron     pyiron_atomistics     pyiron_base     h5io     sqlalchemy     pysqa     kim-api     openkim-models     kimpy     && micromamba clean --all --yes
+#8 CACHED
+
+#9 [ 5/11] RUN micromamba run -n sim python -m pip install --no-cache-dir       --index-url https://download.pytorch.org/whl/cu124       torch==2.5.1+cu124     && micromamba run -n sim python -m pip install --no-cache-dir       mace-torch       cuequivariance       cuequivariance-torch       cuequivariance-ops-torch-cu12       cupy-cuda12x       kim-property
+#9 2.304 Looking in indexes: https://download.pytorch.org/whl/cu124
+#9 3.481 Collecting torch==2.5.1+cu124
+#9 3.925   Downloading https://download-r2.pytorch.org/whl/cu124/torch-2.5.1%2Bcu124-cp311-cp311-linux_x86_64.whl (908.3 MB)
+#9 174.1      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 908.3/908.3 MB 5.9 MB/s  0:02:50
+#9 179.1 Collecting filelock (from torch==2.5.1+cu124)
+#9 179.6   Downloading filelock-3.25.2-py3-none-any.whl.metadata (2.0 kB)
+#9 179.6 Requirement already satisfied: typing-extensions>=4.8.0 in ./opt/micromamba/envs/sim/lib/python3.11/site-packages (from torch==2.5.1+cu124) (4.15.0)
+#9 179.6 Requirement already satisfied: networkx in ./opt/micromamba/envs/sim/lib/python3.11/site-packages (from torch==2.5.1+cu124) (3.6.1)
+#9 179.6 Requirement already satisfied: jinja2 in ./opt/micromamba/envs/sim/lib/python3.11/site-packages (from torch==2.5.1+cu124) (3.1.6)
+#9 180.3 Collecting fsspec (from torch==2.5.1+cu124)
+#9 180.4   Downloading fsspec-2026.2.0-py3-none-any.whl.metadata (10 kB)
+#9 181.1 Collecting nvidia-cuda-nvrtc-cu12==12.4.127 (from torch==2.5.1+cu124)
+#9 181.2   Downloading https://download.pytorch.org/whl/cu124/nvidia_cuda_nvrtc_cu12-12.4.127-py3-none-manylinux2014_x86_64.whl (24.6 MB)
+#9 187.2      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 24.6/24.6 MB 4.2 MB/s  0:00:05
+#9 187.6 Collecting nvidia-cuda-runtime-cu12==12.4.127 (from torch==2.5.1+cu124)
+#9 187.8   Downloading https://download.pytorch.org/whl/cu124/nvidia_cuda_runtime_cu12-12.4.127-py3-none-manylinux2014_x86_64.whl (883 kB)
+#9 188.1      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 883.7/883.7 kB 4.2 MB/s  0:00:00
+#9 188.4 Collecting nvidia-cuda-cupti-cu12==12.4.127 (from torch==2.5.1+cu124)
+#9 188.6   Downloading https://download.pytorch.org/whl/cu124/nvidia_cuda_cupti_cu12-12.4.127-py3-none-manylinux2014_x86_64.whl (13.8 MB)
+#9 192.8      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 13.8/13.8 MB 3.4 MB/s  0:00:04
+#9 193.4 Collecting nvidia-cudnn-cu12==9.1.0.70 (from torch==2.5.1+cu124)
+#9 193.5   Downloading https://download.pytorch.org/whl/cu124/nvidia_cudnn_cu12-9.1.0.70-py3-none-manylinux2014_x86_64.whl (664.8 MB)
+#9 310.4      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 664.8/664.8 MB 5.9 MB/s  0:01:56
+#9 313.5 Collecting nvidia-cublas-cu12==12.4.5.8 (from torch==2.5.1+cu124)
+#9 313.6   Downloading https://download.pytorch.org/whl/cu124/nvidia_cublas_cu12-12.4.5.8-py3-none-manylinux2014_x86_64.whl (363.4 MB)
+#9 380.4      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 363.4/363.4 MB 5.7 MB/s  0:01:06
+#9 382.5 Collecting nvidia-cufft-cu12==11.2.1.3 (from torch==2.5.1+cu124)
+#9 382.6   Downloading https://download.pytorch.org/whl/cu124/nvidia_cufft_cu12-11.2.1.3-py3-none-manylinux2014_x86_64.whl (211.5 MB)
+#9 422.0      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 211.5/211.5 MB 5.6 MB/s  0:00:39
+#9 423.6 Collecting nvidia-curand-cu12==10.3.5.147 (from torch==2.5.1+cu124)
+#9 423.7   Downloading https://download.pytorch.org/whl/cu124/nvidia_curand_cu12-10.3.5.147-py3-none-manylinux2014_x86_64.whl (56.3 MB)
+#9 433.1      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 56.3/56.3 MB 6.0 MB/s  0:00:09
+#9 434.0 Collecting nvidia-cusolver-cu12==11.6.1.9 (from torch==2.5.1+cu124)
+#9 434.1   Downloading https://download.pytorch.org/whl/cu124/nvidia_cusolver_cu12-11.6.1.9-py3-none-manylinux2014_x86_64.whl (127.9 MB)
+#9 456.8      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 127.9/127.9 MB 5.6 MB/s  0:00:22
+#9 457.6 Collecting nvidia-cusparse-cu12==12.3.1.170 (from torch==2.5.1+cu124)
+#9 457.7   Downloading https://download.pytorch.org/whl/cu124/nvidia_cusparse_cu12-12.3.1.170-py3-none-manylinux2014_x86_64.whl (207.5 MB)
+#9 493.8      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 207.5/207.5 MB 5.7 MB/s  0:00:36
+#9 495.4 Collecting nvidia-nccl-cu12==2.21.5 (from torch==2.5.1+cu124)
+#9 495.5   Downloading https://download.pytorch.org/whl/nvidia_nccl_cu12-2.21.5-py3-none-manylinux2014_x86_64.whl (188.7 MB)
+#9 527.7      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 188.7/188.7 MB 5.9 MB/s  0:00:32
+#9 529.0 Collecting nvidia-nvtx-cu12==12.4.127 (from torch==2.5.1+cu124)
+#9 529.1   Downloading https://download.pytorch.org/whl/cu124/nvidia_nvtx_cu12-12.4.127-py3-none-manylinux2014_x86_64.whl (99 kB)
+#9 529.6 Collecting nvidia-nvjitlink-cu12==12.4.127 (from torch==2.5.1+cu124)
+#9 529.7   Downloading https://download.pytorch.org/whl/cu124/nvidia_nvjitlink_cu12-12.4.127-py3-none-manylinux2014_x86_64.whl (21.1 MB)
+#9 533.5      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 21.1/21.1 MB 5.5 MB/s  0:00:03
+#9 534.3 Collecting triton==3.1.0 (from torch==2.5.1+cu124)
+#9 534.5   Downloading https://download-r2.pytorch.org/whl/triton-3.1.0-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (209.5 MB)
+#9 577.1      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 209.5/209.5 MB 5.1 MB/s  0:00:42
+#9 578.8 Collecting sympy==1.13.1 (from torch==2.5.1+cu124)
+#9 578.9   Downloading sympy-1.13.1-py3-none-any.whl.metadata (12 kB)
+#9 579.6 Collecting mpmath<1.4,>=1.1.0 (from sympy==1.13.1->torch==2.5.1+cu124)
+#9 579.7   Downloading mpmath-1.3.0-py3-none-any.whl.metadata (8.6 kB)
+#9 579.8 Requirement already satisfied: MarkupSafe>=2.0 in ./opt/micromamba/envs/sim/lib/python3.11/site-packages (from jinja2->torch==2.5.1+cu124) (3.0.3)
+#9 579.9 Downloading sympy-1.13.1-py3-none-any.whl (6.2 MB)
+#9 581.2    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 6.2/6.2 MB 5.2 MB/s  0:00:01
+#9 581.3 Downloading mpmath-1.3.0-py3-none-any.whl (536 kB)
+#9 581.4    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 536.2/536.2 kB 10.2 MB/s  0:00:00
+#9 581.4 Downloading filelock-3.25.2-py3-none-any.whl (26 kB)
+#9 581.5 Downloading fsspec-2026.2.0-py3-none-any.whl (202 kB)
+#9 583.1 Installing collected packages: mpmath, sympy, nvidia-nvtx-cu12, nvidia-nvjitlink-cu12, nvidia-nccl-cu12, nvidia-curand-cu12, nvidia-cufft-cu12, nvidia-cuda-runtime-cu12, nvidia-cuda-nvrtc-cu12, nvidia-cuda-cupti-cu12, nvidia-cublas-cu12, fsspec, filelock, triton, nvidia-cusparse-cu12, nvidia-cudnn-cu12, nvidia-cusolver-cu12, torch
+#9 583.1   Attempting uninstall: mpmath
+#9 583.1     Found existing installation: mpmath 1.4.1
+#9 583.1     Uninstalling mpmath-1.4.1:
+#9 583.2       Successfully uninstalled mpmath-1.4.1
+#9 584.7   Attempting uninstall: sympy
+#9 584.7     Found existing installation: sympy 1.14.0
+#9 585.3     Uninstalling sympy-1.14.0:
+#9 587.5       Successfully uninstalled sympy-1.14.0
+#9 721.8 
+#9 721.9 Successfully installed filelock-3.25.2 fsspec-2026.2.0 mpmath-1.3.0 nvidia-cublas-cu12-12.4.5.8 nvidia-cuda-cupti-cu12-12.4.127 nvidia-cuda-nvrtc-cu12-12.4.127 nvidia-cuda-runtime-cu12-12.4.127 nvidia-cudnn-cu12-9.1.0.70 nvidia-cufft-cu12-11.2.1.3 nvidia-curand-cu12-10.3.5.147 nvidia-cusolver-cu12-11.6.1.9 nvidia-cusparse-cu12-12.3.1.170 nvidia-nccl-cu12-2.21.5 nvidia-nvjitlink-cu12-12.4.127 nvidia-nvtx-cu12-12.4.127 sympy-1.13.1 torch-2.5.1+cu124 triton-3.1.0
+#9 721.9 WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager, possibly rendering your system unusable. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv. Use the --root-user-action option if you know what you are doing and want to suppress this warning.
+#9 725.9 Collecting mace-torch
+#9 726.4   Downloading mace_torch-0.3.15-py3-none-any.whl.metadata (26 kB)
+#9 726.6 Collecting cuequivariance
+#9 726.7   Downloading cuequivariance-0.9.1-py3-none-any.whl.metadata (15 kB)
+#9 726.8 Collecting cuequivariance-torch
+#9 726.9   Downloading cuequivariance_torch-0.9.1-py3-none-any.whl.metadata (15 kB)
+#9 727.1 Collecting cuequivariance-ops-torch-cu12
+#9 727.2   Downloading cuequivariance_ops_torch_cu12-0.9.1-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl.metadata (21 kB)
+#9 727.5 Collecting cupy-cuda12x
+#9 727.6   Downloading cupy_cuda12x-14.0.1-cp311-cp311-manylinux2014_x86_64.whl.metadata (2.8 kB)
+#9 727.8 Collecting kim-property
+#9 727.9   Downloading kim_property-2.6.14-py3-none-any.whl.metadata (32 kB)
+#9 727.9 Requirement already satisfied: torch>=1.12 in ./opt/micromamba/envs/sim/lib/python3.11/site-packages (from mace-torch) (2.5.1+cu124)
+#9 728.1 Collecting e3nn==0.4.4 (from mace-torch)
+#9 728.1   Downloading e3nn-0.4.4-py3-none-any.whl.metadata (5.1 kB)
+#9 728.2 Requirement already satisfied: numpy in ./opt/micromamba/envs/sim/lib/python3.11/site-packages (from mace-torch) (1.26.4)
+#9 728.3 Collecting opt_einsum (from mace-torch)
+#9 728.4   Downloading opt_einsum-3.4.0-py3-none-any.whl.metadata (6.3 kB)
+#9 728.4 Requirement already satisfied: ase in ./opt/micromamba/envs/sim/lib/python3.11/site-packages (from mace-torch) (3.28.0)
+#9 728.6 Collecting torch-ema (from mace-torch)
+#9 728.7   Downloading torch_ema-0.3-py3-none-any.whl.metadata (415 bytes)
+#9 728.8 Collecting prettytable (from mace-torch)
+#9 728.9   Downloading prettytable-3.17.0-py3-none-any.whl.metadata (34 kB)
+#9 729.2 Collecting matscipy (from mace-torch)
+#9 729.3   Downloading matscipy-1.2.0-cp311-cp311-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl.metadata (37 kB)
+#9 729.4 Requirement already satisfied: h5py in ./opt/micromamba/envs/sim/lib/python3.11/site-packages (from mace-torch) (3.16.0)
+#9 729.5 Collecting torchmetrics (from mace-torch)
+#9 729.6   Downloading torchmetrics-1.9.0-py3-none-any.whl.metadata (23 kB)
+#9 729.8 Collecting python-hostlist (from mace-torch)
+#9 729.9   Downloading python_hostlist-2.3.0.tar.gz (37 kB)
+#9 730.0   Installing build dependencies: started
+#9 734.5   Installing build dependencies: finished with status 'done'
+#9 734.5   Getting requirements to build wheel: started
+#9 735.9   Getting requirements to build wheel: finished with status 'done'
+#9 735.9   Preparing metadata (pyproject.toml): started
+#9 736.7   Preparing metadata (pyproject.toml): finished with status 'done'
+#9 736.8 Collecting configargparse (from mace-torch)
+#9 736.9   Downloading configargparse-1.7.5-py3-none-any.whl.metadata (23 kB)
+#9 736.9 Requirement already satisfied: GitPython in ./opt/micromamba/envs/sim/lib/python3.11/site-packages (from mace-torch) (3.1.46)
+#9 736.9 Requirement already satisfied: pyYAML in ./opt/micromamba/envs/sim/lib/python3.11/site-packages (from mace-torch) (6.0.3)
+#9 736.9 Requirement already satisfied: tqdm in ./opt/micromamba/envs/sim/lib/python3.11/site-packages (from mace-torch) (4.67.3)
+#9 737.3 Collecting lmdb (from mace-torch)
+#9 737.4   Downloading lmdb-2.2.0-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (1.2 kB)
+#9 737.4 Requirement already satisfied: orjson in ./opt/micromamba/envs/sim/lib/python3.11/site-packages (from mace-torch) (3.11.8)
+#9 737.4 Requirement already satisfied: matplotlib in ./opt/micromamba/envs/sim/lib/python3.11/site-packages (from mace-torch) (3.10.8)
+#9 737.4 Requirement already satisfied: pandas in ./opt/micromamba/envs/sim/lib/python3.11/site-packages (from mace-torch) (3.0.2)
+#9 737.4 Requirement already satisfied: sympy in ./opt/micromamba/envs/sim/lib/python3.11/site-packages (from e3nn==0.4.4->mace-torch) (1.13.1)
+#9 737.4 Requirement already satisfied: scipy in ./opt/micromamba/envs/sim/lib/python3.11/site-packages (from e3nn==0.4.4->mace-torch) (1.17.1)
+#9 737.5 Collecting opt-einsum-fx>=0.1.4 (from e3nn==0.4.4->mace-torch)
+#9 737.6   Downloading opt_einsum_fx-0.1.4-py3-none-any.whl.metadata (3.3 kB)
+#9 737.6 Requirement already satisfied: networkx in ./opt/micromamba/envs/sim/lib/python3.11/site-packages (from cuequivariance) (3.6.1)
+#9 737.8 Collecting cuequivariance-ops-cu12==0.9.1 (from cuequivariance-ops-torch-cu12)
+#9 737.9   Downloading cuequivariance_ops_cu12-0.9.1-py3-none-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl.metadata (19 kB)
+#9 738.1 Collecting nvidia-cublas-cu12>=12.5.0 (from cuequivariance-ops-cu12==0.9.1->cuequivariance-ops-torch-cu12)
+#9 738.2   Downloading nvidia_cublas_cu12-12.9.2.10-py3-none-manylinux_2_27_x86_64.whl.metadata (1.8 kB)
+#9 738.3 Collecting nvidia-ml-py (from cuequivariance-ops-cu12==0.9.1->cuequivariance-ops-torch-cu12)
+#9 738.4   Downloading nvidia_ml_py-13.595.45-py3-none-any.whl.metadata (9.7 kB)
+#9 738.5 Requirement already satisfied: platformdirs in ./opt/micromamba/envs/sim/lib/python3.11/site-packages (from cuequivariance-ops-cu12==0.9.1->cuequivariance-ops-torch-cu12) (4.9.6)
+#9 739.5 Collecting numpy (from mace-torch)
+#9 739.5   Downloading numpy-2.4.4-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl.metadata (6.6 kB)
+#9 739.7 Collecting cuda-pathfinder==1.*,>=1.3.3 (from cupy-cuda12x)
+#9 739.8   Downloading cuda_pathfinder-1.5.2-py3-none-any.whl.metadata (1.9 kB)
+#9 740.0 Collecting kim-edn>1.4.0 (from kim-property)
+#9 740.1   Downloading kim_edn-1.4.1-py3-none-any.whl.metadata (12 kB)
+#9 740.1 Requirement already satisfied: nvidia-cuda-nvrtc-cu12 in ./opt/micromamba/envs/sim/lib/python3.11/site-packages (from nvidia-cublas-cu12>=12.5.0->cuequivariance-ops-cu12==0.9.1->cuequivariance-ops-torch-cu12) (12.4.127)
+#9 740.1 Requirement already satisfied: packaging in ./opt/micromamba/envs/sim/lib/python3.11/site-packages (from opt-einsum-fx>=0.1.4->e3nn==0.4.4->mace-torch) (26.0)
+#9 740.1 Requirement already satisfied: filelock in ./opt/micromamba/envs/sim/lib/python3.11/site-packages (from torch>=1.12->mace-torch) (3.25.2)
+#9 740.1 Requirement already satisfied: typing-extensions>=4.8.0 in ./opt/micromamba/envs/sim/lib/python3.11/site-packages (from torch>=1.12->mace-torch) (4.15.0)
+#9 740.1 Requirement already satisfied: jinja2 in ./opt/micromamba/envs/sim/lib/python3.11/site-packages (from torch>=1.12->mace-torch) (3.1.6)
+#9 740.1 Requirement already satisfied: fsspec in ./opt/micromamba/envs/sim/lib/python3.11/site-packages (from torch>=1.12->mace-torch) (2026.2.0)
+#9 740.1 Requirement already satisfied: nvidia-cuda-runtime-cu12==12.4.127 in ./opt/micromamba/envs/sim/lib/python3.11/site-packages (from torch>=1.12->mace-torch) (12.4.127)
+#9 740.1 Requirement already satisfied: nvidia-cuda-cupti-cu12==12.4.127 in ./opt/micromamba/envs/sim/lib/python3.11/site-packages (from torch>=1.12->mace-torch) (12.4.127)
+#9 740.1 Requirement already satisfied: nvidia-cudnn-cu12==9.1.0.70 in ./opt/micromamba/envs/sim/lib/python3.11/site-packages (from torch>=1.12->mace-torch) (9.1.0.70)
+#9 740.1 INFO: pip is looking at multiple versions of torch to determine which version is compatible with other requirements. This could take a while.
+#9 740.5 Collecting torch>=1.12 (from mace-torch)
+#9 740.6   Downloading torch-2.11.0-cp311-cp311-manylinux_2_28_x86_64.whl.metadata (29 kB)
+#9 741.2 Collecting setuptools<82 (from torch>=1.12->mace-torch)
+#9 741.3   Downloading setuptools-81.0.0-py3-none-any.whl.metadata (6.6 kB)
+#9 741.5 Collecting sympy (from e3nn==0.4.4->mace-torch)
+#9 741.6   Downloading sympy-1.14.0-py3-none-any.whl.metadata (12 kB)
+#9 741.7 Collecting cuda-toolkit==13.0.2 (from cuda-toolkit[cublas,cudart,cufft,cufile,cupti,curand,cusolver,cusparse,nvjitlink,nvrtc,nvtx]==13.0.2; platform_system == "Linux"->torch>=1.12->mace-torch)
+#9 741.8   Downloading cuda_toolkit-13.0.2-py2.py3-none-any.whl.metadata (9.4 kB)
+#9 742.0 Collecting cuda-bindings<14,>=13.0.3 (from torch>=1.12->mace-torch)
+#9 742.1   Downloading cuda_bindings-13.2.0-cp311-cp311-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl.metadata (2.3 kB)
+#9 742.2 Collecting nvidia-cudnn-cu13==9.19.0.56 (from torch>=1.12->mace-torch)
+#9 742.3   Downloading nvidia_cudnn_cu13-9.19.0.56-py3-none-manylinux_2_27_x86_64.whl.metadata (1.9 kB)
+#9 742.5 Collecting nvidia-cusparselt-cu13==0.8.0 (from torch>=1.12->mace-torch)
+#9 742.6   Downloading nvidia_cusparselt_cu13-0.8.0-py3-none-manylinux2014_x86_64.whl.metadata (12 kB)
+#9 742.7 Collecting nvidia-nccl-cu13==2.28.9 (from torch>=1.12->mace-torch)
+#9 742.8   Downloading nvidia_nccl_cu13-2.28.9-py3-none-manylinux_2_18_x86_64.whl.metadata (2.0 kB)
+#9 742.9 Collecting nvidia-nvshmem-cu13==3.4.5 (from torch>=1.12->mace-torch)
+#9 743.0   Downloading nvidia_nvshmem_cu13-3.4.5-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (2.1 kB)
+#9 743.2 Collecting triton==3.6.0 (from torch>=1.12->mace-torch)
+#9 743.2   Downloading triton-3.6.0-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl.metadata (1.7 kB)
+#9 743.4 Collecting nvidia-cublas==13.1.0.3.* (from cuda-toolkit[cublas,cudart,cufft,cufile,cupti,curand,cusolver,cusparse,nvjitlink,nvrtc,nvtx]==13.0.2; platform_system == "Linux"->torch>=1.12->mace-torch)
+#9 743.5   Downloading nvidia_cublas-13.1.0.3-py3-none-manylinux_2_27_x86_64.whl.metadata (1.7 kB)
+#9 743.6 Collecting nvidia-cuda-runtime==13.0.96.* (from cuda-toolkit[cublas,cudart,cufft,cufile,cupti,curand,cusolver,cusparse,nvjitlink,nvrtc,nvtx]==13.0.2; platform_system == "Linux"->torch>=1.12->mace-torch)
+#9 743.7   Downloading nvidia_cuda_runtime-13.0.96-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (1.7 kB)
+#9 743.8 Collecting nvidia-cufft==12.0.0.61.* (from cuda-toolkit[cublas,cudart,cufft,cufile,cupti,curand,cusolver,cusparse,nvjitlink,nvrtc,nvtx]==13.0.2; platform_system == "Linux"->torch>=1.12->mace-torch)
+#9 743.9   Downloading nvidia_cufft-12.0.0.61-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (1.8 kB)
+#9 744.0 Collecting nvidia-cufile==1.15.1.6.* (from cuda-toolkit[cublas,cudart,cufft,cufile,cupti,curand,cusolver,cusparse,nvjitlink,nvrtc,nvtx]==13.0.2; platform_system == "Linux"->torch>=1.12->mace-torch)
+#9 744.1   Downloading nvidia_cufile-1.15.1.6-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (1.7 kB)
+#9 744.2 Collecting nvidia-cuda-cupti==13.0.85.* (from cuda-toolkit[cublas,cudart,cufft,cufile,cupti,curand,cusolver,cusparse,nvjitlink,nvrtc,nvtx]==13.0.2; platform_system == "Linux"->torch>=1.12->mace-torch)
+#9 744.3   Downloading nvidia_cuda_cupti-13.0.85-py3-none-manylinux_2_25_x86_64.whl.metadata (1.7 kB)
+#9 744.4 Collecting nvidia-curand==10.4.0.35.* (from cuda-toolkit[cublas,cudart,cufft,cufile,cupti,curand,cusolver,cusparse,nvjitlink,nvrtc,nvtx]==13.0.2; platform_system == "Linux"->torch>=1.12->mace-torch)
+#9 744.5   Downloading nvidia_curand-10.4.0.35-py3-none-manylinux_2_27_x86_64.whl.metadata (1.7 kB)
+#9 744.7 Collecting nvidia-cusolver==12.0.4.66.* (from cuda-toolkit[cublas,cudart,cufft,cufile,cupti,curand,cusolver,cusparse,nvjitlink,nvrtc,nvtx]==13.0.2; platform_system == "Linux"->torch>=1.12->mace-torch)
+#9 744.8   Downloading nvidia_cusolver-12.0.4.66-py3-none-manylinux_2_27_x86_64.whl.metadata (1.8 kB)
+#9 744.9 Collecting nvidia-cusparse==12.6.3.3.* (from cuda-toolkit[cublas,cudart,cufft,cufile,cupti,curand,cusolver,cusparse,nvjitlink,nvrtc,nvtx]==13.0.2; platform_system == "Linux"->torch>=1.12->mace-torch)
+#9 745.0   Downloading nvidia_cusparse-12.6.3.3-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (1.8 kB)
+#9 745.1 Collecting nvidia-nvjitlink==13.0.88.* (from cuda-toolkit[cublas,cudart,cufft,cufile,cupti,curand,cusolver,cusparse,nvjitlink,nvrtc,nvtx]==13.0.2; platform_system == "Linux"->torch>=1.12->mace-torch)
+#9 745.2   Downloading nvidia_nvjitlink-13.0.88-py3-none-manylinux2010_x86_64.manylinux_2_12_x86_64.whl.metadata (1.7 kB)
+#9 745.3 Collecting nvidia-cuda-nvrtc==13.0.88.* (from cuda-toolkit[cublas,cudart,cufft,cufile,cupti,curand,cusolver,cusparse,nvjitlink,nvrtc,nvtx]==13.0.2; platform_system == "Linux"->torch>=1.12->mace-torch)
+#9 745.4   Downloading nvidia_cuda_nvrtc-13.0.88-py3-none-manylinux2010_x86_64.manylinux_2_12_x86_64.whl.metadata (1.7 kB)
+#9 745.5 Collecting nvidia-nvtx==13.0.85.* (from cuda-toolkit[cublas,cudart,cufft,cufile,cupti,curand,cusolver,cusparse,nvjitlink,nvrtc,nvtx]==13.0.2; platform_system == "Linux"->torch>=1.12->mace-torch)
+#9 745.6   Downloading nvidia_nvtx-13.0.85-py3-none-manylinux1_x86_64.manylinux_2_5_x86_64.whl.metadata (1.8 kB)
+#9 745.7 Requirement already satisfied: mpmath<1.4,>=1.1.0 in ./opt/micromamba/envs/sim/lib/python3.11/site-packages (from sympy->e3nn==0.4.4->mace-torch) (1.3.0)
+#9 745.8 Requirement already satisfied: contourpy>=1.0.1 in ./opt/micromamba/envs/sim/lib/python3.11/site-packages (from matplotlib->mace-torch) (1.3.3)
+#9 745.8 Requirement already satisfied: cycler>=0.10 in ./opt/micromamba/envs/sim/lib/python3.11/site-packages (from matplotlib->mace-torch) (0.12.1)
+#9 745.8 Requirement already satisfied: fonttools>=4.22.0 in ./opt/micromamba/envs/sim/lib/python3.11/site-packages (from matplotlib->mace-torch) (4.62.0)
+#9 745.8 Requirement already satisfied: kiwisolver>=1.3.1 in ./opt/micromamba/envs/sim/lib/python3.11/site-packages (from matplotlib->mace-torch) (1.5.0)
+#9 745.8 Requirement already satisfied: pillow>=8 in ./opt/micromamba/envs/sim/lib/python3.11/site-packages (from matplotlib->mace-torch) (12.2.0)
+#9 745.8 Requirement already satisfied: pyparsing>=3 in ./opt/micromamba/envs/sim/lib/python3.11/site-packages (from matplotlib->mace-torch) (3.3.2)
+#9 745.8 Requirement already satisfied: python-dateutil>=2.7 in ./opt/micromamba/envs/sim/lib/python3.11/site-packages (from matplotlib->mace-torch) (2.9.0.post0)
+#9 745.9 Requirement already satisfied: six>=1.5 in ./opt/micromamba/envs/sim/lib/python3.11/site-packages (from python-dateutil>=2.7->matplotlib->mace-torch) (1.17.0)
+#9 745.9 Requirement already satisfied: gitdb<5,>=4.0.1 in ./opt/micromamba/envs/sim/lib/python3.11/site-packages (from GitPython->mace-torch) (4.0.12)
+#9 745.9 Requirement already satisfied: smmap<6,>=3.0.1 in ./opt/micromamba/envs/sim/lib/python3.11/site-packages (from gitdb<5,>=4.0.1->GitPython->mace-torch) (5.0.3)
+#9 746.0 Requirement already satisfied: MarkupSafe>=2.0 in ./opt/micromamba/envs/sim/lib/python3.11/site-packages (from jinja2->torch>=1.12->mace-torch) (3.0.3)
+#9 746.0 Requirement already satisfied: wcwidth in ./opt/micromamba/envs/sim/lib/python3.11/site-packages (from prettytable->mace-torch) (0.6.0)
+#9 746.2 Collecting lightning-utilities>=0.15.3 (from torchmetrics->mace-torch)
+#9 746.3   Downloading lightning_utilities-0.15.3-py3-none-any.whl.metadata (5.5 kB)
+#9 746.4 Downloading mace_torch-0.3.15-py3-none-any.whl (264 kB)
+#9 746.7 Downloading e3nn-0.4.4-py3-none-any.whl (387 kB)
+#9 747.0 Downloading cuequivariance-0.9.1-py3-none-any.whl (269 kB)
+#9 747.3 Downloading cuequivariance_torch-0.9.1-py3-none-any.whl (205 kB)
+#9 747.4 Downloading cuequivariance_ops_torch_cu12-0.9.1-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (402 kB)
+#9 747.6 Downloading cuequivariance_ops_cu12-0.9.1-py3-none-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl (31.1 MB)
+#9 753.8    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 31.1/31.1 MB 5.0 MB/s  0:00:06
+#9 753.9 Downloading cupy_cuda12x-14.0.1-cp311-cp311-manylinux2014_x86_64.whl (135.1 MB)
+#9 781.3    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 135.1/135.1 MB 4.9 MB/s  0:00:27
+#9 781.5 Downloading cuda_pathfinder-1.5.2-py3-none-any.whl (49 kB)
+#9 781.6 Downloading numpy-2.4.4-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (16.9 MB)
+#9 785.7    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 16.9/16.9 MB 4.1 MB/s  0:00:04
+#9 785.8 Downloading kim_property-2.6.14-py3-none-any.whl (79 kB)
+#9 785.9 Downloading kim_edn-1.4.1-py3-none-any.whl (28 kB)
+#9 786.0 Downloading nvidia_cublas_cu12-12.9.2.10-py3-none-manylinux_2_27_x86_64.whl (581.2 MB)
+#9 902.1    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 581.2/581.2 MB 5.3 MB/s  0:01:56
+#9 902.2 Downloading opt_einsum_fx-0.1.4-py3-none-any.whl (13 kB)
+#9 902.3 Downloading torch-2.11.0-cp311-cp311-manylinux_2_28_x86_64.whl (530.6 MB)
+#9 991.9    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 530.6/530.6 MB 6.0 MB/s  0:01:29
+#9 992.0 Downloading cuda_toolkit-13.0.2-py2.py3-none-any.whl (2.4 kB)
+#9 992.1 Downloading nvidia_cudnn_cu13-9.19.0.56-py3-none-manylinux_2_27_x86_64.whl (366.1 MB)
+#9 1065.8    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 366.1/366.1 MB 4.8 MB/s  0:01:13
+#9 1065.9 Downloading nvidia_cusparselt_cu13-0.8.0-py3-none-manylinux2014_x86_64.whl (169.9 MB)
+#9 1098.3    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 169.9/169.9 MB 5.3 MB/s  0:00:32
+#9 1098.4 Downloading nvidia_nccl_cu13-2.28.9-py3-none-manylinux_2_18_x86_64.whl (196.5 MB)
+#9 1133.8    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 196.5/196.5 MB 5.5 MB/s  0:00:35
+#9 1134.0 Downloading nvidia_nvshmem_cu13-3.4.5-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (60.4 MB)
+#9 1145.5    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 60.4/60.4 MB 5.3 MB/s  0:00:11
+#9 1145.6 Downloading triton-3.6.0-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (188.2 MB)
+#9 1186.8    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 188.2/188.2 MB 4.4 MB/s  0:00:41
+#9 1186.9 Downloading cuda_bindings-13.2.0-cp311-cp311-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl (6.3 MB)
+#9 1188.4    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 6.3/6.3 MB 4.1 MB/s  0:00:01
+#9 1188.5 Downloading nvidia_cublas-13.1.0.3-py3-none-manylinux_2_27_x86_64.whl (423.1 MB)
+#9 1271.5    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 423.1/423.1 MB 5.3 MB/s  0:01:22
+#9 1271.6 Downloading nvidia_cuda_cupti-13.0.85-py3-none-manylinux_2_25_x86_64.whl (10.7 MB)
+#9 1273.6    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 10.7/10.7 MB 5.5 MB/s  0:00:01
+#9 1273.7 Downloading nvidia_cuda_nvrtc-13.0.88-py3-none-manylinux2010_x86_64.manylinux_2_12_x86_64.whl (90.2 MB)
+#9 1288.2    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 90.2/90.2 MB 6.2 MB/s  0:00:14
+#9 1288.3 Downloading nvidia_cuda_runtime-13.0.96-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (2.2 MB)
+#9 1288.6    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2.2/2.2 MB 7.3 MB/s  0:00:00
+#9 1288.7 Downloading nvidia_cufft-12.0.0.61-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (214.1 MB)
+#9 1324.9    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 214.1/214.1 MB 5.8 MB/s  0:00:36
+#9 1325.0 Downloading nvidia_cufile-1.15.1.6-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (1.2 MB)
+#9 1325.6    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.2/1.2 MB 2.3 MB/s  0:00:00
+#9 1325.7 Downloading nvidia_curand-10.4.0.35-py3-none-manylinux_2_27_x86_64.whl (59.5 MB)
+#9 1337.9    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 59.5/59.5 MB 4.9 MB/s  0:00:12
+#9 1338.0 Downloading nvidia_cusolver-12.0.4.66-py3-none-manylinux_2_27_x86_64.whl (200.9 MB)
+#9 1375.9    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 200.9/200.9 MB 5.4 MB/s  0:00:37
+#9 1376.0 Downloading nvidia_cusparse-12.6.3.3-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (145.9 MB)
+#9 1400.5    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 145.9/145.9 MB 6.0 MB/s  0:00:24
+#9 1400.6 Downloading nvidia_nvjitlink-13.0.88-py3-none-manylinux2010_x86_64.manylinux_2_12_x86_64.whl (40.7 MB)
+#9 1407.3    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 40.7/40.7 MB 6.1 MB/s  0:00:06
+#9 1407.4 Downloading nvidia_nvtx-13.0.85-py3-none-manylinux1_x86_64.manylinux_2_5_x86_64.whl (148 kB)
+#9 1407.5 Downloading setuptools-81.0.0-py3-none-any.whl (1.1 MB)
+#9 1407.7    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.1/1.1 MB 6.9 MB/s  0:00:00
+#9 1407.8 Downloading sympy-1.14.0-py3-none-any.whl (6.3 MB)
+#9 1409.0    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 6.3/6.3 MB 5.5 MB/s  0:00:01
+#9 1409.1 Downloading configargparse-1.7.5-py3-none-any.whl (27 kB)
+#9 1409.2 Downloading lmdb-2.2.0-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (324 kB)
+#9 1409.3 Downloading matscipy-1.2.0-cp311-cp311-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl (452 kB)
+#9 1409.5 Downloading nvidia_ml_py-13.595.45-py3-none-any.whl (51 kB)
+#9 1409.6 Downloading opt_einsum-3.4.0-py3-none-any.whl (71 kB)
+#9 1409.7 Downloading prettytable-3.17.0-py3-none-any.whl (34 kB)
+#9 1409.8 Downloading torch_ema-0.3-py3-none-any.whl (5.5 kB)
+#9 1409.9 Downloading torchmetrics-1.9.0-py3-none-any.whl (983 kB)
+#9 1410.1    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 983.4/983.4 kB 7.7 MB/s  0:00:00
+#9 1410.2 Downloading lightning_utilities-0.15.3-py3-none-any.whl (31 kB)
+#9 1426.6 Building wheels for collected packages: python-hostlist
+#9 1426.6   Building wheel for python-hostlist (pyproject.toml): started
+#9 1427.9   Building wheel for python-hostlist (pyproject.toml): finished with status 'done'
+#9 1427.9   Created wheel for python-hostlist: filename=python_hostlist-2.3.0-py3-none-any.whl size=39522 sha256=e216ddc06b6084560ce6db39485643ddcd50ff959f7794d38e6deca0355a2c5b
+#9 1427.9   Stored in directory: /tmp/pip-ephem-wheel-cache-x_4966qg/wheels/1c/8d/ba/a5ca9ff6e79635d53a905679d9f6b055f95a20bdb966ca4854
+#9 1427.9 Successfully built python-hostlist
+#9 1429.6 Installing collected packages: python-hostlist, nvidia-ml-py, nvidia-cusparselt-cu13, cuda-toolkit, triton, sympy, setuptools, prettytable, opt_einsum, nvidia-nvtx, nvidia-nvshmem-cu13, nvidia-nvjitlink, nvidia-nccl-cu13, nvidia-curand, nvidia-cufile, nvidia-cuda-runtime, nvidia-cuda-nvrtc, nvidia-cuda-cupti, nvidia-cublas-cu12, nvidia-cublas, numpy, lmdb, lightning-utilities, kim-edn, cuda-pathfinder, configargparse, nvidia-cusparse, nvidia-cufft, nvidia-cudnn-cu13, kim-property, cupy-cuda12x, cuequivariance-ops-cu12, cuda-bindings, nvidia-cusolver, cuequivariance-ops-torch-cu12, cuequivariance, cuequivariance-torch, torch, matscipy, torchmetrics, torch-ema, opt-einsum-fx, e3nn, mace-torch
+#9 1432.2   Attempting uninstall: triton
+#9 1432.2     Found existing installation: triton 3.1.0
+#9 1432.3     Uninstalling triton-3.1.0:
+#9 1432.4       Successfully uninstalled triton-3.1.0
+#9 1440.6   Attempting uninstall: sympy
+#9 1440.6     Found existing installation: sympy 1.13.1
+#9 1441.2     Uninstalling sympy-1.13.1:
+#9 1442.6       Successfully uninstalled sympy-1.13.1
+#9 1464.5   Attempting uninstall: setuptools
+#9 1464.6     Found existing installation: setuptools 82.0.1
+#9 1464.6     Uninstalling setuptools-82.0.1:
+#9 1465.8       Successfully uninstalled setuptools-82.0.1
+#9 1477.5   Attempting uninstall: nvidia-cublas-cu12
+#9 1477.5     Found existing installation: nvidia-cublas-cu12 12.4.5.8
+#9 1477.5     Uninstalling nvidia-cublas-cu12-12.4.5.8:
+#9 1477.5       Successfully uninstalled nvidia-cublas-cu12-12.4.5.8
+#9 1493.6   Attempting uninstall: numpy
+#9 1493.6     Found existing installation: numpy 1.26.4
+#9 1493.8     Uninstalling numpy-1.26.4:
+#9 1494.6       Successfully uninstalled numpy-1.26.4
+#9 1526.4   Attempting uninstall: torch
+#9 1526.5     Found existing installation: torch 2.5.1+cu124
+#9 1527.8     Uninstalling torch-2.5.1+cu124:
+#9 1528.1       Successfully uninstalled torch-2.5.1+cu124
+#9 1577.6 
+#9 1577.6 ERROR: pip's dependency resolver does not currently take into account all the packages that are installed. This behaviour is the source of the following dependency conflicts.
+#9 1577.6 mendeleev 1.0.0 requires numpy<2.0,>=1.21; python_version < "3.12", but you have numpy 2.4.4 which is incompatible.
+#9 1577.6 pylammpsmpi 0.3.11 requires numpy<=2.4.2,>=1.23.5, but you have numpy 2.4.4 which is incompatible.
+#9 1577.6 structuretoolkit 0.0.41 requires numpy<=2.4.3,>=1.23.5, but you have numpy 2.4.4 which is incompatible.
+#9 1577.6 Successfully installed configargparse-1.7.5 cuda-bindings-13.2.0 cuda-pathfinder-1.5.2 cuda-toolkit-13.0.2 cuequivariance-0.9.1 cuequivariance-ops-cu12-0.9.1 cuequivariance-ops-torch-cu12-0.9.1 cuequivariance-torch-0.9.1 cupy-cuda12x-14.0.1 e3nn-0.4.4 kim-edn-1.4.1 kim-property-2.6.14 lightning-utilities-0.15.3 lmdb-2.2.0 mace-torch-0.3.15 matscipy-1.2.0 numpy-2.4.4 nvidia-cublas-13.1.0.3 nvidia-cublas-cu12-12.9.2.10 nvidia-cuda-cupti-13.0.85 nvidia-cuda-nvrtc-13.0.88 nvidia-cuda-runtime-13.0.96 nvidia-cudnn-cu13-9.19.0.56 nvidia-cufft-12.0.0.61 nvidia-cufile-1.15.1.6 nvidia-curand-10.4.0.35 nvidia-cusolver-12.0.4.66 nvidia-cusparse-12.6.3.3 nvidia-cusparselt-cu13-0.8.0 nvidia-ml-py-13.595.45 nvidia-nccl-cu13-2.28.9 nvidia-nvjitlink-13.0.88 nvidia-nvshmem-cu13-3.4.5 nvidia-nvtx-13.0.85 opt-einsum-fx-0.1.4 opt_einsum-3.4.0 prettytable-3.17.0 python-hostlist-2.3.0 setuptools-81.0.0 sympy-1.14.0 torch-2.11.0 torch-ema-0.3 torchmetrics-1.9.0 triton-3.6.0
+#9 1577.6 WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager, possibly rendering your system unusable. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv. Use the --root-user-action option if you know what you are doing and want to suppress this warning.
+#9 DONE 1579.1s
+
+#10 [ 6/11] WORKDIR /opt
+#10 DONE 0.1s
+
+#11 [ 7/11] RUN git clone --depth 1 --branch develop https://github.com/lammps/lammps.git
+#11 0.303 Cloning into 'lammps'...
+#11 118.5 Updating files:   9% (1273/13272)Updating files:  10% (1328/13272)Updating files:  11% (1460/13272)Updating files:  12% (1593/13272)Updating files:  13% (1726/13272)Updating files:  14% (1859/13272)Updating files:  15% (1991/13272)Updating files:  16% (2124/13272)Updating files:  17% (2257/13272)Updating files:  18% (2389/13272)Updating files:  19% (2522/13272)Updating files:  20% (2655/13272)Updating files:  20% (2774/13272)Updating files:  21% (2788/13272)Updating files:  22% (2920/13272)Updating files:  23% (3053/13272)Updating files:  24% (3186/13272)Updating files:  25% (3318/13272)Updating files:  26% (3451/13272)Updating files:  27% (3584/13272)Updating files:  28% (3717/13272)Updating files:  29% (3849/13272)Updating files:  30% (3982/13272)Updating files:  31% (4115/13272)Updating files:  32% (4248/13272)Updating files:  33% (4380/13272)Updating files:  34% (4513/13272)Updating files:  35% (4646/13272)Updating files:  36% (4778/13272)Updating files:  37% (4911/13272)Updating files:  38% (5044/13272)Updating files:  39% (5177/13272)Updating files:  39% (5210/13272)Updating files:  40% (5309/13272)Updating files:  41% (5442/13272)Updating files:  42% (5575/13272)Updating files:  43% (5707/13272)Updating files:  44% (5840/13272)Updating files:  45% (5973/13272)Updating files:  46% (6106/13272)Updating files:  47% (6238/13272)Updating files:  48% (6371/13272)Updating files:  49% (6504/13272)Updating files:  50% (6636/13272)Updating files:  51% (6769/13272)Updating files:  52% (6902/13272)Updating files:  53% (7035/13272)Updating files:  54% (7167/13272)Updating files:  55% (7300/13272)Updating files:  56% (7433/13272)Updating files:  57% (7566/13272)Updating files:  58% (7698/13272)Updating files:  59% (7831/13272)Updating files:  60% (7964/13272)Updating files:  61% (8096/13272)Updating files:  62% (8229/13272)Updating files:  63% (8362/13272)Updating files:  64% (8495/13272)Updating files:  65% (8627/13272)Updating files:  66% (8760/13272)Updating files:  67% (8893/13272)Updating files:  68% (9025/13272)Updating files:  68% (9096/13272)Updating files:  69% (9158/13272)Updating files:  70% (9291/13272)Updating files:  71% (9424/13272)Updating files:  72% (9556/13272)Updating files:  73% (9689/13272)Updating files:  74% (9822/13272)Updating files:  75% (9954/13272)Updating files:  76% (10087/13272)Updating files:  77% (10220/13272)Updating files:  78% (10353/13272)Updating files:  79% (10485/13272)Updating files:  80% (10618/13272)Updating files:  81% (10751/13272)Updating files:  82% (10884/13272)Updating files:  83% (11016/13272)Updating files:  84% (11149/13272)Updating files:  85% (11282/13272)Updating files:  86% (11414/13272)Updating files:  87% (11547/13272)Updating files:  88% (11680/13272)Updating files:  89% (11813/13272)Updating files:  90% (11945/13272)Updating files:  91% (12078/13272)Updating files:  92% (12211/13272)Updating files:  93% (12343/13272)Updating files:  94% (12476/13272)Updating files:  95% (12609/13272)Updating files:  96% (12742/13272)Updating files:  97% (12874/13272)Updating files:  98% (13007/13272)Updating files:  99% (13140/13272)Updating files: 100% (13272/13272)Updating files: 100% (13272/13272), done.
+#11 DONE 122.5s
+
+#12 [ 8/11] WORKDIR /opt/lammps/build
+#12 DONE 0.0s
+
+#13 [ 9/11] RUN export PKG_CONFIG_PATH="/opt/micromamba/envs/sim/lib/pkgconfig:${PKG_CONFIG_PATH}"     && export CMAKE_PREFIX_PATH="/opt/micromamba/envs/sim:${CMAKE_PREFIX_PATH}"     && micromamba run -n sim cmake -G Ninja ../cmake       -D CMAKE_BUILD_TYPE=Release       -D CMAKE_INSTALL_PREFIX=/opt/lammps-install       -D CMAKE_CXX_STANDARD=17       -D BUILD_MPI=ON       -D BUILD_SHARED_LIBS=ON       -D PKG_KIM=ON       -D DOWNLOAD_KIM=OFF       -D PKG_ML-IAP=ON       -D PKG_ML-SNAP=ON       -D MLIAP_ENABLE_PYTHON=ON       -D PKG_PYTHON=ON       -D PKG_ML-PACE=ON       -D PKG_KOKKOS=ON       -D Kokkos_ENABLE_CUDA=ON       -D Kokkos_ENABLE_SERIAL=ON       -DKokkos_ARCH_AMPERE80=ON       -D PKG_MANYBODY=ON       -D PKG_MEAM=ON       -D PKG_KSPACE=ON       -D PKG_EXTRA-COMPUTE=ON       -D PKG_EXTRA-DUMP=ON       -D PKG_EXTRA-FIX=ON       -D PKG_EXTRA-MOLECULE=ON       -D PKG_EXTRA-PAIR=ON       -D PKG_MISC=ON       -D PKG_REPLICA=ON       -D PKG_RIGID=ON       -D FFT=FFTW3       -D FFTW3_INCLUDE_DIR=/opt/micromamba/envs/sim/include       -D FFTW3_LIBRARY=/opt/micromamba/envs/sim/lib/libfftw3.so       -D Python_EXECUTABLE=/opt/micromamba/envs/sim/bin/python
+#13 0.996 CMake Deprecation Warning at CMakeLists.txt:22 (cmake_policy):
+#13 0.996   The OLD behavior for policy CMP0109 will be removed from a future version
+#13 0.996   of CMake.
+#13 0.996 
+#13 0.996   The cmake-policies(7) manual explains that the OLD behaviors of all
+#13 0.996   policies are deprecated and that a policy should be set to OLD only under
+#13 0.996   specific short-term circumstances.  Projects should be ported to the NEW
+#13 0.996   behavior and not rely on setting a policy to OLD.
+#13 0.996 
+#13 0.996 
+#13 0.997 CMake Deprecation Warning at CMakeLists.txt:26 (cmake_policy):
+#13 0.997   The OLD behavior for policy CMP0135 will be removed from a future version
+#13 0.997   of CMake.
+#13 0.997 
+#13 0.997   The cmake-policies(7) manual explains that the OLD behaviors of all
+#13 0.997   policies are deprecated and that a policy should be set to OLD only under
+#13 0.997   specific short-term circumstances.  Projects should be ported to the NEW
+#13 0.997   behavior and not rely on setting a policy to OLD.
+#13 0.997 
+#13 0.997 
+#13 2.153 -- The CXX compiler identification is GNU 13.4.0
+#13 2.906 -- The C compiler identification is GNU 13.4.0
+#13 2.968 -- Detecting CXX compiler ABI info
+#13 3.946 -- Detecting CXX compiler ABI info - done
+#13 4.099 -- Check for working CXX compiler: /opt/micromamba/envs/sim/bin/x86_64-conda-linux-gnu-c++ - skipped
+#13 4.102 -- Detecting CXX compile features
+#13 4.107 -- Detecting CXX compile features - done
+#13 4.236 -- Detecting C compiler ABI info
+#13 4.995 -- Detecting C compiler ABI info - done
+#13 5.136 -- Check for working C compiler: /opt/micromamba/envs/sim/bin/x86_64-conda-linux-gnu-cc - skipped
+#13 5.137 -- Detecting C compile features
+#13 5.140 -- Detecting C compile features - done
+#13 5.288 -- Found Git: /usr/bin/git (found version "2.34.1")
+#13 5.290 -- Appending /opt/micromamba/envs/sim/lib/libfabric:/usr/local/cuda/lib64/stubs to CMAKE_LIBRARY_PATH: /opt/micromamba/envs/sim/lib/libfabric:/usr/local/cuda/lib64/stubs
+#13 5.293 -- Running check for auto-generated files from make-based build system
+#13 8.614 -- Found MPI_CXX: /usr/lib/x86_64-linux-gnu/openmpi/lib/libmpi_cxx.so (found version "3.1")
+#13 8.616 -- Found MPI: TRUE (found version "3.1") found components: CXX
+#13 8.619 CMake Warning at Modules/LAMMPSUtils.cmake:126 (message):
+#13 8.619   The EXTRA-MOLECULE package depends on the MOLECULE package.  Enabling it.
+#13 8.619 Call Stack (most recent call first):
+#13 8.619   CMakeLists.txt:453 (pkg_depends)
+#13 8.619 
+#13 8.619 
+#13 11.22 -- Looking for C++ include omp.h
+#13 11.98 -- Looking for C++ include omp.h - found
+#13 11.99 -- Found OpenMP_CXX: -fopenmp (found version "4.5")
+#13 12.00 -- Found OpenMP: TRUE (found version "4.5") found components: CXX
+#13 12.02 -- Found GZIP: /usr/bin/gzip
+#13 12.36 -- Found PkgConfig: /opt/micromamba/envs/sim/bin/pkg-config (found version "0.29.2")
+#13 12.36 -- Checking for module 'fftw3'
+#13 14.02 --   Found fftw3, version 3.3.10
+#13 18.90 -- Found FFTW3: /opt/micromamba/envs/sim/lib/libfftw3.so
+#13 20.80 -- Found Python: /opt/micromamba/envs/sim/bin/python (found version "3.11.15") found components: Interpreter Development Development.Module Development.Embed
+#13 22.88 -- Found Cythonize: /opt/micromamba/envs/sim/bin/cythonize
+#13 24.45 -- Found Python: /opt/micromamba/envs/sim/include/python3.11 (found version "3.11.15") found components: NumPy Interpreter Development.Module
+#13 31.69 -- Found CURL: /opt/micromamba/envs/sim/lib/libcurl.so (found version "8.19.0")
+#13 38.15 -- Found KIM-API: /opt/micromamba/envs/sim/lib/libkim-api.so.2.3.0
+#13 38.16 CMake Deprecation Warning at Modules/Packages/ML-PACE.cmake:10 (cmake_policy):
+#13 38.16   The OLD behavior for policy CMP0135 will be removed from a future version
+#13 38.16   of CMake.
+#13 38.16 
+#13 38.16   The cmake-policies(7) manual explains that the OLD behaviors of all
+#13 38.16   policies are deprecated and that a policy should be set to OLD only under
+#13 38.16   specific short-term circumstances.  Projects should be ported to the NEW
+#13 38.16   behavior and not rely on setting a policy to OLD.
+#13 38.16 Call Stack (most recent call first):
+#13 38.16   CMakeLists.txt:567 (include)
+#13 38.16 
+#13 38.16 
+#13 38.16 -- Downloading https://github.com/ICAMS/lammps-user-pace/archive/refs/tags/v.2023.11.25.fix2.tar.gz
+#13 45.00 -- Using double precision for KOKKOS package
+#13 45.00 -- Using legacy view layout for KOKKOS package
+#13 45.08 -- Setting default Kokkos CXX standard to 20
+#13 45.08 -- Kokkos version: 5.1.99
+#13 45.11 -- The project name is: Kokkos
+#13 45.64 -- kokkos_launch_compiler (/opt/lammps/lib/kokkos/bin/kokkos_launch_compiler) is enabled...
+#13 45.93 -- Kokkos is configured for CMake languages CXX compilation (using NVIDIA version 12.4.131)
+#13 45.97 -- Using -std=c++20 for C++20 standard as feature
+#13 46.96 -- Built-in Execution Spaces:
+#13 46.96 --     Device Parallel: Kokkos::Cuda
+#13 46.96 --     Host Parallel: NoTypeDefined
+#13 46.96 --       Host Serial: SERIAL
+#13 46.96 -- 
+#13 46.96 -- Architectures:
+#13 46.96 --  AMPERE80
+#13 47.27 -- Found CUDAToolkit: /usr/local/cuda/targets/x86_64-linux/include (found version "12.4.131")
+#13 47.28 -- Performing Test CMAKE_HAVE_LIBC_PTHREAD
+#13 48.06 -- Performing Test CMAKE_HAVE_LIBC_PTHREAD - Success
+#13 48.07 -- Found Threads: TRUE
+#13 48.41 -- Using bundled desul_atomics copy (desul/desul@68f8e83926657f2669712a12e97ec71fd59b72a6)
+#13 48.42 -- Using bundled mdspan copy (kokkos/mdspan@5d4eb209c77f4744980c0b0c2af44636cc81b08b)
+#13 48.44 -- Kokkos Backends: SERIAL;CUDA
+#13 48.50 CMake Warning at Modules/Packages/KOKKOS.cmake:188 (message):
+#13 48.50   Using KISS FFT with the CUDA backend of Kokkos may be sub-optimal.
+#13 48.50 Call Stack (most recent call first):
+#13 48.50   CMakeLists.txt:682 (include)
+#13 48.50 
+#13 48.50 
+#13 48.56 -- Generating style headers...
+#13 50.33 -- Generating package headers...
+#13 52.55 -- Generating lmpinstalledpkgs.h...
+#13 52.89 -- Found Python: /opt/micromamba/envs/sim/bin/python (found version "3.11.15") found components: Interpreter
+#13 54.02 -- Found Python3: /opt/micromamba/envs/sim/bin/python (found version "3.11.15") found components: Interpreter
+#13 54.19 -- The following tools and libraries have been found and configured:
+#13 54.19  * MPI
+#13 54.19  * OpenMP
+#13 54.19  * FFTW3
+#13 54.19  * Cythonize
+#13 54.19  * CURL
+#13 54.19  * KIM-API (required version >= 2.2.0)
+#13 54.19  * Threads
+#13 54.19  * CUDAToolkit
+#13 54.19  * Python
+#13 54.19  * Python3
+#13 54.19 
+#13 54.68 -- <<< Build configuration >>>
+#13 54.68    LAMMPS Version:   2026.3.30.0 457ea8c
+#13 54.68    Operating System: Linux Ubuntu" 22.04
+#13 54.68    CMake Version:    4.3.1
+#13 54.68    Build type:       Release
+#13 54.68    Install path:     /opt/lammps-install
+#13 54.68    Generator:        Ninja using /usr/bin/ninja
+#13 54.68 -- Enabled packages: EXTRA-COMPUTE;EXTRA-DUMP;EXTRA-FIX;EXTRA-MOLECULE;EXTRA-PAIR;KIM;KOKKOS;KSPACE;MANYBODY;MEAM;MISC;ML-IAP;ML-PACE;ML-SNAP;MOLECULE;PYTHON;REPLICA;RIGID
+#13 54.68 -- <<< Compilers and Flags: >>>
+#13 54.68 -- C++ Compiler:     /opt/micromamba/envs/sim/bin/x86_64-conda-linux-gnu-c++
+#13 54.68       Type:          GNU
+#13 54.68       Version:       13.4.0
+#13 54.68       C++ Standard:  20
+#13 54.68       C++ Flags:    -fvisibility-inlines-hidden -fmessage-length=0 -march=nocona -mtune=haswell -ftree-vectorize -fPIC -fstack-protector-strong -fno-plt -O2 -ffunction-sections -pipe -isystem /opt/micromamba/envs/sim/include -O3 -DNDEBUG
+#13 54.68       Defines:       LAMMPS_SMALLBIG;LAMMPS_MEMALIGN=64;LAMMPS_OMP_COMPAT=4;LAMMPS_GZIP;FFT_FFTW3;FFT_FFTW_THREADS;LMP_PYTHON;MLIAP_PYTHON;MLIAP_ACE;LMP_KIM_CURL;LMP_KOKKOS_DOUBLE_DOUBLE;LMP_KOKKOS_LAYOUT_LEGACY;$<BUILD_INTERFACE:LMP_KOKKOS>;FFT_KOKKOS_KISS
+#13 54.68 -- C compiler:       /opt/micromamba/envs/sim/bin/x86_64-conda-linux-gnu-cc
+#13 54.68       Type:          GNU
+#13 54.68       Version:       13.4.0
+#13 54.68       C Flags:      -march=nocona -mtune=haswell -ftree-vectorize -fPIC -fstack-protector-strong -fno-plt -O2 -ffunction-sections -pipe -isystem /opt/micromamba/envs/sim/include -O3 -DNDEBUG
+#13 54.68 -- <<< Linker flags: >>>
+#13 54.68 -- Executable name:  lmp
+#13 54.68 -- Executable linker flags: -Wl,-O2 -Wl,--sort-common -Wl,--as-needed -Wl,-z,relro -Wl,-z,now -Wl,--disable-new-dtags -Wl,--gc-sections -Wl,--allow-shlib-undefined -Wl,-rpath,/opt/micromamba/envs/sim/lib -Wl,-rpath-link,/opt/micromamba/envs/sim/lib -L/opt/micromamba/envs/sim/lib
+#13 54.68 -- Shared library flags:    -Wl,-O2 -Wl,--sort-common -Wl,--as-needed -Wl,-z,relro -Wl,-z,now -Wl,--disable-new-dtags -Wl,--gc-sections -Wl,--allow-shlib-undefined -Wl,-rpath,/opt/micromamba/envs/sim/lib -Wl,-rpath-link,/opt/micromamba/envs/sim/lib -L/opt/micromamba/envs/sim/lib
+#13 54.68 -- <<< MPI flags >>>
+#13 54.68 -- MPI_defines:      MPICH_SKIP_MPICXX;OMPI_SKIP_MPICXX;_MPICC_H
+#13 54.68 -- MPI includes:     /usr/lib/x86_64-linux-gnu/openmpi/include;/usr/lib/x86_64-linux-gnu/openmpi/include/openmpi
+#13 54.68 -- MPI libraries:    /usr/lib/x86_64-linux-gnu/openmpi/lib/libmpi_cxx.so;/opt/micromamba/envs/sim/lib/libmpi.so;
+#13 54.68 -- Kokkos Devices: CUDA;SERIAL
+#13 54.68 -- Kokkos Architecture: AMPERE80
+#13 54.68 -- <<< FFT settings >>>
+#13 54.68 -- Primary FFT lib:  FFTW3
+#13 54.68 -- Using double precision FFTs
+#13 54.68 -- Using threaded FFTs
+#13 54.68 -- Using builtin distributed FFT algorithms
+#13 54.68 -- Kokkos FFT: KISS
+#13 54.69 -- Configuring done (53.7s)
+#13 55.64 -- Generating done (0.9s)
+#13 55.64 -- Build files have been written to: /opt/lammps/build
+#13 DONE 55.7s
+
+#14 [10/11] RUN export PKG_CONFIG_PATH="/opt/micromamba/envs/sim/lib/pkgconfig:${PKG_CONFIG_PATH}"     && export CMAKE_PREFIX_PATH="/opt/micromamba/envs/sim:${CMAKE_PREFIX_PATH}"     && micromamba run -n sim cmake --build . --parallel 4 --verbose     && micromamba run -n sim cmake --install .     && micromamba run -n sim cmake --build . --target install-python --parallel 2 --verbose
+#14 0.959 Change Dir: '/opt/lammps/build'
+#14 0.960 
+#14 0.960 Run Build Command(s): /usr/bin/ninja -v -j 4
+#14 1.084 [0/2] /opt/micromamba/envs/sim/bin/cmake -P /opt/lammps/build/CMakeFiles/VerifyGlobs.cmake
+#14 1.689 [1/1000] cd /opt/lammps/build && /opt/micromamba/envs/sim/bin/cmake -E copy_if_different /opt/lammps/src/variable.h /opt/lammps/build/includes/lammps/variable.h
+#14 1.690 [2/1000] cd /opt/lammps/build && /opt/micromamba/envs/sim/bin/cmake -E copy_if_different /opt/lammps/src/fmt/core.h /opt/lammps/build/includes/lammps/fmt/core.h
+#14 1.691 [3/1000] cd /opt/lammps/build && /opt/micromamba/envs/sim/bin/cmake -E copy_if_different /opt/lammps/src/nlohmann/json_fwd.hpp /opt/lammps/build/includes/lammps/nlohmann/json_fwd.hpp
+#14 1.692 [4/1000] cd /opt/lammps/build && /opt/micromamba/envs/sim/bin/cmake -E copy_if_different /opt/lammps/src/fmt/format.h /opt/lammps/build/includes/lammps/fmt/format.h
+#14 1.799 [5/1000] cd /opt/lammps/build && /opt/micromamba/envs/sim/bin/cmake -E copy_if_different /opt/lammps/src/lattice.h /opt/lammps/build/includes/lammps/lattice.h
+#14 1.911 [6/1000] cd /opt/lammps/build && /opt/micromamba/envs/sim/bin/cmake -E copy_if_different /opt/lammps/src/library.h /opt/lammps/build/includes/lammps/library.h
+#14 2.025 [7/1000] cd /opt/lammps/build && /opt/micromamba/envs/sim/bin/cmake -E copy_if_different /opt/lammps/src/lmppython.h /opt/lammps/build/includes/lammps/lmppython.h
+#14 2.135 [8/1000] cd /opt/lammps/build && /opt/micromamba/envs/sim/bin/cmake -E copy_if_different /opt/lammps/src/lmptype.h /opt/lammps/build/includes/lammps/lmptype.h
+#14 2.247 [9/1000] cd /opt/lammps/build && /opt/micromamba/envs/sim/bin/cmake -E copy_if_different /opt/lammps/src/memory.h /opt/lammps/build/includes/lammps/memory.h
+#14 2.357 [10/1000] cd /opt/lammps/build && /opt/micromamba/envs/sim/bin/cmake -E copy_if_different /opt/lammps/src/modify.h /opt/lammps/build/includes/lammps/modify.h
+#14 2.468 [11/1000] cd /opt/lammps/build && /opt/micromamba/envs/sim/bin/cmake -E copy_if_different /opt/lammps/src/neighbor.h /opt/lammps/build/includes/lammps/neighbor.h
+#14 2.575 [12/1000] cd /opt/lammps/build && /opt/micromamba/envs/sim/bin/cmake -E copy_if_different /opt/lammps/src/neigh_list.h /opt/lammps/build/includes/lammps/neigh_list.h
+#14 2.682 [13/1000] cd /opt/lammps/build && /opt/micromamba/envs/sim/bin/cmake -E copy_if_different /opt/lammps/src/output.h /opt/lammps/build/includes/lammps/output.h
+#14 2.808 [14/1000] cd /opt/lammps/build && /opt/micromamba/envs/sim/bin/cmake -E copy_if_different /opt/lammps/src/pair.h /opt/lammps/build/includes/lammps/pair.h
+#14 2.916 [15/1000] cd /opt/lammps/build && /opt/micromamba/envs/sim/bin/cmake -E copy_if_different /opt/lammps/src/platform.h /opt/lammps/build/includes/lammps/platform.h
+#14 3.020 [16/1000] cd /opt/lammps/build && /opt/micromamba/envs/sim/bin/cmake -E copy_if_different /opt/lammps/src/pointers.h /opt/lammps/build/includes/lammps/pointers.h
+#14 3.128 [17/1000] cd /opt/lammps/build && /opt/micromamba/envs/sim/bin/cmake -E copy_if_different /opt/lammps/src/region.h /opt/lammps/build/includes/lammps/region.h
+#14 3.244 [18/1000] cd /opt/lammps/build && /opt/micromamba/envs/sim/bin/cmake -E copy_if_different /opt/lammps/src/timer.h /opt/lammps/build/includes/lammps/timer.h
+#14 3.349 [19/1000] cd /opt/lammps/build && /opt/micromamba/envs/sim/bin/cmake -E copy_if_different /opt/lammps/src/universe.h /opt/lammps/build/includes/lammps/universe.h
+#14 3.454 [20/1000] cd /opt/lammps/build && /opt/micromamba/envs/sim/bin/cmake -E copy_if_different /opt/lammps/src/update.h /opt/lammps/build/includes/lammps/update.h
+#14 3.564 [21/1000] cd /opt/lammps/build && /opt/micromamba/envs/sim/bin/cmake -E copy_if_different /opt/lammps/src/utils.h /opt/lammps/build/includes/lammps/utils.h
+#14 3.676 [22/1000] cd /opt/lammps/build && /opt/micromamba/envs/sim/bin/cmake -E copy_if_different /opt/lammps/src/nlohmann/json.hpp /opt/lammps/build/includes/lammps/nlohmann/json.hpp
+#14 3.786 [23/1000] cd /opt/lammps/build && /opt/micromamba/envs/sim/bin/cmake -E copy_if_different /opt/lammps/src/citeme.h /opt/lammps/build/includes/lammps/citeme.h
+#14 3.892 [24/1000] cd /opt/lammps/build && /opt/micromamba/envs/sim/bin/cmake -E copy_if_different /opt/lammps/src/comm.h /opt/lammps/build/includes/lammps/comm.h
+#14 4.000 [25/1000] cd /opt/lammps/build && /opt/micromamba/envs/sim/bin/cmake -E copy_if_different /opt/lammps/src/command.h /opt/lammps/build/includes/lammps/command.h
+#14 4.112 [26/1000] cd /opt/lammps/build && /opt/micromamba/envs/sim/bin/cmake -E copy_if_different /opt/lammps/src/compute.h /opt/lammps/build/includes/lammps/compute.h
+#14 4.220 [27/1000] cd /opt/lammps/build && /opt/micromamba/envs/sim/bin/cmake -E copy_if_different /opt/lammps/src/dihedral.h /opt/lammps/build/includes/lammps/dihedral.h
+#14 4.326 [28/1000] cd /opt/lammps/build && /opt/micromamba/envs/sim/bin/cmake -E copy_if_different /opt/lammps/src/domain.h /opt/lammps/build/includes/lammps/domain.h
+#14 4.434 [29/1000] cd /opt/lammps/build && /opt/micromamba/envs/sim/bin/cmake -E copy_if_different /opt/lammps/src/error.h /opt/lammps/build/includes/lammps/error.h
+#14 4.541 [30/1000] cd /opt/lammps/build && /opt/micromamba/envs/sim/bin/cmake -E copy_if_different /opt/lammps/src/angle.h /opt/lammps/build/includes/lammps/angle.h
+#14 4.652 [31/1000] cd /opt/lammps/build && /opt/micromamba/envs/sim/bin/cmake -E copy_if_different /opt/lammps/src/atom.h /opt/lammps/build/includes/lammps/atom.h
+#14 4.758 [32/1000] cd /opt/lammps/build && /opt/micromamba/envs/sim/bin/cmake -E copy_if_different /opt/lammps/src/bond.h /opt/lammps/build/includes/lammps/bond.h
+#14 4.864 [33/1000] cd /opt/lammps/build && /opt/micromamba/envs/sim/bin/cmake -E copy_if_different /opt/lammps/src/exceptions.h /opt/lammps/build/includes/lammps/exceptions.h
+#14 4.973 [34/1000] cd /opt/lammps/build && /opt/micromamba/envs/sim/bin/cmake -E copy_if_different /opt/lammps/src/fix.h /opt/lammps/build/includes/lammps/fix.h
+#14 5.084 [35/1000] cd /opt/lammps/build && /opt/micromamba/envs/sim/bin/cmake -E copy_if_different /opt/lammps/src/force.h /opt/lammps/build/includes/lammps/force.h
+#14 5.193 [36/1000] cd /opt/lammps/build && /opt/micromamba/envs/sim/bin/cmake -E copy_if_different /opt/lammps/src/group.h /opt/lammps/build/includes/lammps/group.h
+#14 5.299 [37/1000] cd /opt/lammps/build && /opt/micromamba/envs/sim/bin/cmake -E copy_if_different /opt/lammps/src/improper.h /opt/lammps/build/includes/lammps/improper.h
+#14 5.407 [38/1000] cd /opt/lammps/build && /opt/micromamba/envs/sim/bin/cmake -E copy_if_different /opt/lammps/src/input.h /opt/lammps/build/includes/lammps/input.h
+#14 5.515 [39/1000] cd /opt/lammps/build && /opt/micromamba/envs/sim/bin/cmake -E copy_if_different /opt/lammps/src/info.h /opt/lammps/build/includes/lammps/info.h
+#14 5.624 [40/1000] cd /opt/lammps/build && /opt/micromamba/envs/sim/bin/cmake -E copy_if_different /opt/lammps/src/json.h /opt/lammps/build/includes/lammps/json.h
+#14 5.733 [41/1000] cd /opt/lammps/build && /opt/micromamba/envs/sim/bin/cmake -E copy_if_different /opt/lammps/src/json_fwd.h /opt/lammps/build/includes/lammps/json_fwd.h
+#14 5.839 [42/1000] cd /opt/lammps/build && /opt/micromamba/envs/sim/bin/cmake -E copy_if_different /opt/lammps/src/kspace.h /opt/lammps/build/includes/lammps/kspace.h
+#14 5.944 [43/1000] cd /opt/lammps/build && /opt/micromamba/envs/sim/bin/cmake -E copy_if_different /opt/lammps/src/lammps.h /opt/lammps/build/includes/lammps/lammps.h
+#14 6.395 [44/1000] cd /opt/lammps/build && /opt/micromamba/envs/sim/bin/cmake -DLAMMPS_DIR="/opt/lammps" -DGIT_EXECUTABLE="/usr/bin/git" -DGIT_FOUND="TRUE" -DLAMMPS_STYLE_HEADERS_DIR="/opt/lammps/build/styles" -P /opt/lammps/cmake/Modules/generate_lmpgitversion.cmake
+#14 6.395 -- Git Directory: /opt/lammps/.git
+#14 6.395 -- Generating lmpgitversion.h...
+#14 8.477 [45/1000] /opt/lammps/lib/kokkos/bin/kokkos_launch_compiler /opt/lammps/lib/kokkos/bin/nvcc_wrapper /opt/micromamba/envs/sim/bin/x86_64-conda-linux-gnu-c++ /opt/micromamba/envs/sim/bin/x86_64-conda-linux-gnu-c++ -DKOKKOS_DEPENDENCE -I/opt/lammps/build/lib/kokkos/core/src -I/opt/lammps/lib/kokkos/core/src -I/opt/lammps/build/lib/kokkos -isystem /opt/lammps/lib/kokkos/tpls/desul/include -isystem /opt/lammps/lib/kokkos/tpls/mdspan/include -isystem /usr/local/cuda/targets/x86_64-linux/include -x c++ -fvisibility-inlines-hidden -fmessage-length=0 -march=nocona -mtune=haswell -ftree-vectorize -fPIC -fstack-protector-strong -fno-plt -O2 -ffunction-sections -pipe -isystem /opt/micromamba/envs/sim/include -O3 -DNDEBUG -std=c++20 -fPIC -extended-lambda -Wext-lambda-captures-this -arch=sm_80 -MD -MT lib/kokkos/core/src/CMakeFiles/kokkoscore.dir/opt/lammps/lib/kokkos/tpls/desul/src/Lock_Array_CUDA.cpp.o -MF lib/kokkos/core/src/CMakeFiles/kokkoscore.dir/opt/lammps/lib/kokkos/tpls/desul/src/Lock_Array_CUDA.cpp.o.d -o lib/kokkos/core/src/CMakeFiles/kokkoscore.dir/opt/lammps/lib/kokkos/tpls/desul/src/Lock_Array_CUDA.cpp.o -c /opt/lammps/lib/kokkos/tpls/desul/src/Lock_Array_CUDA.cpp
+#14 8.477 FAILED: lib/kokkos/core/src/CMakeFiles/kokkoscore.dir/opt/lammps/lib/kokkos/tpls/desul/src/Lock_Array_CUDA.cpp.o 
+#14 8.477 /opt/lammps/lib/kokkos/bin/kokkos_launch_compiler /opt/lammps/lib/kokkos/bin/nvcc_wrapper /opt/micromamba/envs/sim/bin/x86_64-conda-linux-gnu-c++ /opt/micromamba/envs/sim/bin/x86_64-conda-linux-gnu-c++ -DKOKKOS_DEPENDENCE -I/opt/lammps/build/lib/kokkos/core/src -I/opt/lammps/lib/kokkos/core/src -I/opt/lammps/build/lib/kokkos -isystem /opt/lammps/lib/kokkos/tpls/desul/include -isystem /opt/lammps/lib/kokkos/tpls/mdspan/include -isystem /usr/local/cuda/targets/x86_64-linux/include -x c++ -fvisibility-inlines-hidden -fmessage-length=0 -march=nocona -mtune=haswell -ftree-vectorize -fPIC -fstack-protector-strong -fno-plt -O2 -ffunction-sections -pipe -isystem /opt/micromamba/envs/sim/include -O3 -DNDEBUG -std=c++20 -fPIC -extended-lambda -Wext-lambda-captures-this -arch=sm_80 -MD -MT lib/kokkos/core/src/CMakeFiles/kokkoscore.dir/opt/lammps/lib/kokkos/tpls/desul/src/Lock_Array_CUDA.cpp.o -MF lib/kokkos/core/src/CMakeFiles/kokkoscore.dir/opt/lammps/lib/kokkos/tpls/desul/src/Lock_Array_CUDA.cpp.o.d -o lib/kokkos/core/src/CMakeFiles/kokkoscore.dir/opt/lammps/lib/kokkos/tpls/desul/src/Lock_Array_CUDA.cpp.o -c /opt/lammps/lib/kokkos/tpls/desul/src/Lock_Array_CUDA.cpp
+#14 8.477 nvcc_wrapper - *warning* you have set multiple optimization flags (-O*), only the last is used because nvcc can only accept a single optimization setting.
+#14 8.477 qemu: uncaught target signal 11 (Segmentation fault) - core dumped
+#14 8.477 Segmentation fault
+#14 19.66 [46/1000] /opt/lammps/lib/kokkos/bin/kokkos_launch_compiler /opt/lammps/lib/kokkos/bin/nvcc_wrapper /opt/micromamba/envs/sim/bin/x86_64-conda-linux-gnu-c++ /opt/micromamba/envs/sim/bin/x86_64-conda-linux-gnu-c++ -DKOKKOS_DEPENDENCE -I/opt/lammps/build/lib/kokkos/core/src -I/opt/lammps/lib/kokkos/core/src -I/opt/lammps/build/lib/kokkos -isystem /opt/lammps/lib/kokkos/tpls/desul/include -isystem /opt/lammps/lib/kokkos/tpls/mdspan/include -isystem /usr/local/cuda/targets/x86_64-linux/include -x c++ -fvisibility-inlines-hidden -fmessage-length=0 -march=nocona -mtune=haswell -ftree-vectorize -fPIC -fstack-protector-strong -fno-plt -O2 -ffunction-sections -pipe -isystem /opt/micromamba/envs/sim/include -O3 -DNDEBUG -std=c++20 -fPIC -extended-lambda -Wext-lambda-captures-this -arch=sm_80 -MD -MT lib/kokkos/core/src/CMakeFiles/kokkoscore.dir/Serial/Kokkos_Serial.cpp.o -MF lib/kokkos/core/src/CMakeFiles/kokkoscore.dir/Serial/Kokkos_Serial.cpp.o.d -o lib/kokkos/core/src/CMakeFiles/kokkoscore.dir/Serial/Kokkos_Serial.cpp.o -c /opt/lammps/lib/kokkos/core/src/Serial/Kokkos_Serial.cpp
+#14 19.66 FAILED: lib/kokkos/core/src/CMakeFiles/kokkoscore.dir/Serial/Kokkos_Serial.cpp.o 
+#14 19.66 /opt/lammps/lib/kokkos/bin/kokkos_launch_compiler /opt/lammps/lib/kokkos/bin/nvcc_wrapper /opt/micromamba/envs/sim/bin/x86_64-conda-linux-gnu-c++ /opt/micromamba/envs/sim/bin/x86_64-conda-linux-gnu-c++ -DKOKKOS_DEPENDENCE -I/opt/lammps/build/lib/kokkos/core/src -I/opt/lammps/lib/kokkos/core/src -I/opt/lammps/build/lib/kokkos -isystem /opt/lammps/lib/kokkos/tpls/desul/include -isystem /opt/lammps/lib/kokkos/tpls/mdspan/include -isystem /usr/local/cuda/targets/x86_64-linux/include -x c++ -fvisibility-inlines-hidden -fmessage-length=0 -march=nocona -mtune=haswell -ftree-vectorize -fPIC -fstack-protector-strong -fno-plt -O2 -ffunction-sections -pipe -isystem /opt/micromamba/envs/sim/include -O3 -DNDEBUG -std=c++20 -fPIC -extended-lambda -Wext-lambda-captures-this -arch=sm_80 -MD -MT lib/kokkos/core/src/CMakeFiles/kokkoscore.dir/Serial/Kokkos_Serial.cpp.o -MF lib/kokkos/core/src/CMakeFiles/kokkoscore.dir/Serial/Kokkos_Serial.cpp.o.d -o lib/kokkos/core/src/CMakeFiles/kokkoscore.dir/Serial/Kokkos_Serial.cpp.o -c /opt/lammps/lib/kokkos/core/src/Serial/Kokkos_Serial.cpp
+#14 19.66 nvcc_wrapper - *warning* you have set multiple optimization flags (-O*), only the last is used because nvcc can only accept a single optimization setting.
+#14 19.66 qemu: uncaught target signal 11 (Segmentation fault) - core dumped
+#14 19.66 Segmentation fault
+#14 20.71 [47/1000] /opt/lammps/lib/kokkos/bin/kokkos_launch_compiler /opt/lammps/lib/kokkos/bin/nvcc_wrapper /opt/micromamba/envs/sim/bin/x86_64-conda-linux-gnu-c++ /opt/micromamba/envs/sim/bin/x86_64-conda-linux-gnu-c++ -DKOKKOS_DEPENDENCE -I/opt/lammps/build/lib/kokkos/core/src -I/opt/lammps/lib/kokkos/core/src -I/opt/lammps/build/lib/kokkos -isystem /opt/lammps/lib/kokkos/tpls/desul/include -isystem /opt/lammps/lib/kokkos/tpls/mdspan/include -isystem /usr/local/cuda/targets/x86_64-linux/include -x c++ -fvisibility-inlines-hidden -fmessage-length=0 -march=nocona -mtune=haswell -ftree-vectorize -fPIC -fstack-protector-strong -fno-plt -O2 -ffunction-sections -pipe -isystem /opt/micromamba/envs/sim/include -O3 -DNDEBUG -std=c++20 -fPIC -extended-lambda -Wext-lambda-captures-this -arch=sm_80 -MD -MT lib/kokkos/core/src/CMakeFiles/kokkoscore.dir/Cuda/Kokkos_Cuda_Instance.cpp.o -MF lib/kokkos/core/src/CMakeFiles/kokkoscore.dir/Cuda/Kokkos_Cuda_Instance.cpp.o.d -o lib/kokkos/core/src/CMakeFiles/kokkoscore.dir/Cuda/Kokkos_Cuda_Instance.cpp.o -c /opt/lammps/lib/kokkos/core/src/Cuda/Kokkos_Cuda_Instance.cpp
+#14 20.71 FAILED: lib/kokkos/core/src/CMakeFiles/kokkoscore.dir/Cuda/Kokkos_Cuda_Instance.cpp.o 
+#14 20.71 /opt/lammps/lib/kokkos/bin/kokkos_launch_compiler /opt/lammps/lib/kokkos/bin/nvcc_wrapper /opt/micromamba/envs/sim/bin/x86_64-conda-linux-gnu-c++ /opt/micromamba/envs/sim/bin/x86_64-conda-linux-gnu-c++ -DKOKKOS_DEPENDENCE -I/opt/lammps/build/lib/kokkos/core/src -I/opt/lammps/lib/kokkos/core/src -I/opt/lammps/build/lib/kokkos -isystem /opt/lammps/lib/kokkos/tpls/desul/include -isystem /opt/lammps/lib/kokkos/tpls/mdspan/include -isystem /usr/local/cuda/targets/x86_64-linux/include -x c++ -fvisibility-inlines-hidden -fmessage-length=0 -march=nocona -mtune=haswell -ftree-vectorize -fPIC -fstack-protector-strong -fno-plt -O2 -ffunction-sections -pipe -isystem /opt/micromamba/envs/sim/include -O3 -DNDEBUG -std=c++20 -fPIC -extended-lambda -Wext-lambda-captures-this -arch=sm_80 -MD -MT lib/kokkos/core/src/CMakeFiles/kokkoscore.dir/Cuda/Kokkos_Cuda_Instance.cpp.o -MF lib/kokkos/core/src/CMakeFiles/kokkoscore.dir/Cuda/Kokkos_Cuda_Instance.cpp.o.d -o lib/kokkos/core/src/CMakeFiles/kokkoscore.dir/Cuda/Kokkos_Cuda_Instance.cpp.o -c /opt/lammps/lib/kokkos/core/src/Cuda/Kokkos_Cuda_Instance.cpp
+#14 20.71 nvcc_wrapper - *warning* you have set multiple optimization flags (-O*), only the last is used because nvcc can only accept a single optimization setting.
+#14 20.71 qemu: uncaught target signal 11 (Segmentation fault) - core dumped
+#14 20.71 Segmentation fault
+#14 32.58 [48/1000] /opt/lammps/lib/kokkos/bin/kokkos_launch_compiler /opt/lammps/lib/kokkos/bin/nvcc_wrapper /opt/micromamba/envs/sim/bin/x86_64-conda-linux-gnu-c++ /opt/micromamba/envs/sim/bin/x86_64-conda-linux-gnu-c++  -I/opt/lammps/build/lammps-user-pace-v.2023.11.25.fix2 -fvisibility-inlines-hidden -fmessage-length=0 -march=nocona -mtune=haswell -ftree-vectorize -fPIC -fstack-protector-strong -fno-plt -O2 -ffunction-sections -pipe -isystem /opt/micromamba/envs/sim/include -O3 -DNDEBUG -std=c++20 -fPIC -MD -MT build-pace/CMakeFiles/cnpy-static.dir/cnpy/cnpy.cpp.o -MF build-pace/CMakeFiles/cnpy-static.dir/cnpy/cnpy.cpp.o.d -o build-pace/CMakeFiles/cnpy-static.dir/cnpy/cnpy.cpp.o -c /opt/lammps/build/lammps-user-pace-v.2023.11.25.fix2/cnpy/cnpy.cpp
+#14 32.58 ninja: build stopped: subcommand failed.
+#14 32.59 
+#14 ERROR: process "/bin/bash -lc export PKG_CONFIG_PATH=\"${MAMBA_ROOT_PREFIX}/envs/sim/lib/pkgconfig:${PKG_CONFIG_PATH}\"     && export CMAKE_PREFIX_PATH=\"${MAMBA_ROOT_PREFIX}/envs/sim:${CMAKE_PREFIX_PATH}\"     && micromamba run -n sim cmake --build . --parallel 4 --verbose     && micromamba run -n sim cmake --install .     && micromamba run -n sim cmake --build . --target install-python --parallel 2 --verbose" did not complete successfully: exit code: 1
+------
+ > [10/11] RUN export PKG_CONFIG_PATH="/opt/micromamba/envs/sim/lib/pkgconfig:${PKG_CONFIG_PATH}"     && export CMAKE_PREFIX_PATH="/opt/micromamba/envs/sim:${CMAKE_PREFIX_PATH}"     && micromamba run -n sim cmake --build . --parallel 4 --verbose     && micromamba run -n sim cmake --install .     && micromamba run -n sim cmake --build . --target install-python --parallel 2 --verbose:
+19.66 Segmentation fault
+20.71 [47/1000] /opt/lammps/lib/kokkos/bin/kokkos_launch_compiler /opt/lammps/lib/kokkos/bin/nvcc_wrapper /opt/micromamba/envs/sim/bin/x86_64-conda-linux-gnu-c++ /opt/micromamba/envs/sim/bin/x86_64-conda-linux-gnu-c++ -DKOKKOS_DEPENDENCE -I/opt/lammps/build/lib/kokkos/core/src -I/opt/lammps/lib/kokkos/core/src -I/opt/lammps/build/lib/kokkos -isystem /opt/lammps/lib/kokkos/tpls/desul/include -isystem /opt/lammps/lib/kokkos/tpls/mdspan/include -isystem /usr/local/cuda/targets/x86_64-linux/include -x c++ -fvisibility-inlines-hidden -fmessage-length=0 -march=nocona -mtune=haswell -ftree-vectorize -fPIC -fstack-protector-strong -fno-plt -O2 -ffunction-sections -pipe -isystem /opt/micromamba/envs/sim/include -O3 -DNDEBUG -std=c++20 -fPIC -extended-lambda -Wext-lambda-captures-this -arch=sm_80 -MD -MT lib/kokkos/core/src/CMakeFiles/kokkoscore.dir/Cuda/Kokkos_Cuda_Instance.cpp.o -MF lib/kokkos/core/src/CMakeFiles/kokkoscore.dir/Cuda/Kokkos_Cuda_Instance.cpp.o.d -o lib/kokkos/core/src/CMakeFiles/kokkoscore.dir/Cuda/Kokkos_Cuda_Instance.cpp.o -c /opt/lammps/lib/kokkos/core/src/Cuda/Kokkos_Cuda_Instance.cpp
+20.71 FAILED: lib/kokkos/core/src/CMakeFiles/kokkoscore.dir/Cuda/Kokkos_Cuda_Instance.cpp.o 
+20.71 /opt/lammps/lib/kokkos/bin/kokkos_launch_compiler /opt/lammps/lib/kokkos/bin/nvcc_wrapper /opt/micromamba/envs/sim/bin/x86_64-conda-linux-gnu-c++ /opt/micromamba/envs/sim/bin/x86_64-conda-linux-gnu-c++ -DKOKKOS_DEPENDENCE -I/opt/lammps/build/lib/kokkos/core/src -I/opt/lammps/lib/kokkos/core/src -I/opt/lammps/build/lib/kokkos -isystem /opt/lammps/lib/kokkos/tpls/desul/include -isystem /opt/lammps/lib/kokkos/tpls/mdspan/include -isystem /usr/local/cuda/targets/x86_64-linux/include -x c++ -fvisibility-inlines-hidden -fmessage-length=0 -march=nocona -mtune=haswell -ftree-vectorize -fPIC -fstack-protector-strong -fno-plt -O2 -ffunction-sections -pipe -isystem /opt/micromamba/envs/sim/include -O3 -DNDEBUG -std=c++20 -fPIC -extended-lambda -Wext-lambda-captures-this -arch=sm_80 -MD -MT lib/kokkos/core/src/CMakeFiles/kokkoscore.dir/Cuda/Kokkos_Cuda_Instance.cpp.o -MF lib/kokkos/core/src/CMakeFiles/kokkoscore.dir/Cuda/Kokkos_Cuda_Instance.cpp.o.d -o lib/kokkos/core/src/CMakeFiles/kokkoscore.dir/Cuda/Kokkos_Cuda_Instance.cpp.o -c /opt/lammps/lib/kokkos/core/src/Cuda/Kokkos_Cuda_Instance.cpp
+20.71 nvcc_wrapper - *warning* you have set multiple optimization flags (-O*), only the last is used because nvcc can only accept a single optimization setting.
+20.71 qemu: uncaught target signal 11 (Segmentation fault) - core dumped
+20.71 Segmentation fault
+32.58 [48/1000] /opt/lammps/lib/kokkos/bin/kokkos_launch_compiler /opt/lammps/lib/kokkos/bin/nvcc_wrapper /opt/micromamba/envs/sim/bin/x86_64-conda-linux-gnu-c++ /opt/micromamba/envs/sim/bin/x86_64-conda-linux-gnu-c++  -I/opt/lammps/build/lammps-user-pace-v.2023.11.25.fix2 -fvisibility-inlines-hidden -fmessage-length=0 -march=nocona -mtune=haswell -ftree-vectorize -fPIC -fstack-protector-strong -fno-plt -O2 -ffunction-sections -pipe -isystem /opt/micromamba/envs/sim/include -O3 -DNDEBUG -std=c++20 -fPIC -MD -MT build-pace/CMakeFiles/cnpy-static.dir/cnpy/cnpy.cpp.o -MF build-pace/CMakeFiles/cnpy-static.dir/cnpy/cnpy.cpp.o.d -o build-pace/CMakeFiles/cnpy-static.dir/cnpy/cnpy.cpp.o -c /opt/lammps/build/lammps-user-pace-v.2023.11.25.fix2/cnpy/cnpy.cpp
+32.58 ninja: build stopped: subcommand failed.
+32.59 
+------
+Dockerfile.lammps-pyiron:114
+--------------------
+ 113 |     # Build and install inside the same environment. Use -v for better diagnostics if a subcommand fails.
+ 114 | >>> RUN export PKG_CONFIG_PATH="${MAMBA_ROOT_PREFIX}/envs/sim/lib/pkgconfig:${PKG_CONFIG_PATH}" \
+ 115 | >>>     && export CMAKE_PREFIX_PATH="${MAMBA_ROOT_PREFIX}/envs/sim:${CMAKE_PREFIX_PATH}" \
+ 116 | >>>     && micromamba run -n sim cmake --build . --parallel 4 --verbose \
+ 117 | >>>     && micromamba run -n sim cmake --install . \
+ 118 | >>>     && micromamba run -n sim cmake --build . --target install-python --parallel 2 --verbose
+ 119 |     
+--------------------
+ERROR: failed to build: failed to solve: process "/bin/bash -lc export PKG_CONFIG_PATH=\"${MAMBA_ROOT_PREFIX}/envs/sim/lib/pkgconfig:${PKG_CONFIG_PATH}\"     && export CMAKE_PREFIX_PATH=\"${MAMBA_ROOT_PREFIX}/envs/sim:${CMAKE_PREFIX_PATH}\"     && micromamba run -n sim cmake --build . --parallel 4 --verbose     && micromamba run -n sim cmake --install .     && micromamba run -n sim cmake --build . --target install-python --parallel 2 --verbose" did not complete successfully: exit code: 1
+
+View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/skumsryejwogf19k8mwb9ojrr
