@@ -11,8 +11,8 @@ set -euo pipefail
 #
 # Main fix in this version:
 # - avoid Ubuntu's externally-managed system Python
-# - prefer the image's /opt/conda Python/Pip
-# - fall back to a dedicated venv only if /opt/conda is unavailable
+# - create a dedicated venv with --system-site-packages
+# - reuse the image's preinstalled Torch/CUDA stack inside that venv
 #
 # Usage inside the container:
 #   bash docker/startup_md.sh
@@ -59,23 +59,15 @@ apt-get install -y --no-install-recommends \
   python3-venv \
   && rm -rf /var/lib/apt/lists/*
 
-echo "==> Selecting Python environment"
-if [ -x /opt/conda/bin/python ] && [ -x /opt/conda/bin/pip ]; then
-  PYTHON_BIN=/opt/conda/bin/python
-  PIP_BIN=/opt/conda/bin/pip
-  PY_ENV_KIND=conda
-else
-  python3 -m venv /opt/cuzr-venv
-  PYTHON_BIN=/opt/cuzr-venv/bin/python
-  PIP_BIN=/opt/cuzr-venv/bin/pip
-  PY_ENV_KIND=venv
-fi
+echo "==> Creating Python venv with system site packages"
+python3 -m venv --system-site-packages /opt/cuzr-venv
+PYTHON_BIN=/opt/cuzr-venv/bin/python
+PIP_BIN=/opt/cuzr-venv/bin/pip
 
 export PYTHON_BIN
 export PIP_BIN
-export PATH="$(dirname "${PYTHON_BIN}"):${PATH}"
+export PATH="/opt/cuzr-venv/bin:${PATH}"
 
-echo "==> Python environment kind: ${PY_ENV_KIND}"
 echo "==> Python: ${PYTHON_BIN}"
 echo "==> Pip:    ${PIP_BIN}"
 "${PYTHON_BIN}" --version
@@ -206,11 +198,11 @@ cmake --build . --target install-python --parallel 1
 
 echo "==> Writing environment helper"
 cat >/etc/profile.d/cuzr-lammps.sh <<EOF
-export PATH="${LAMMPS_INSTALL_DIR}/bin:$(dirname "${PYTHON_BIN}"):\$PATH"
+export PATH="${LAMMPS_INSTALL_DIR}/bin:/opt/cuzr-venv/bin:\$PATH"
 export LD_LIBRARY_PATH="${LAMMPS_INSTALL_DIR}/lib:\$LD_LIBRARY_PATH"
 EOF
 
-export PATH="${LAMMPS_INSTALL_DIR}/bin:$(dirname "${PYTHON_BIN}"):${PATH}"
+export PATH="${LAMMPS_INSTALL_DIR}/bin:/opt/cuzr-venv/bin:${PATH}"
 export LD_LIBRARY_PATH="${LAMMPS_INSTALL_DIR}/lib:${LD_LIBRARY_PATH:-}"
 
 echo "==> Final verification"
