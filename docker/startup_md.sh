@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Startup/setup script for a container based on:
-#   pytorch/pytorch:2.8.0-cuda12.8-cudnn9-devel
+#   pytorch/pytorch:2.8.0-cuda12.6-cudnn9-devel
 #
 # Goal:
 # - install system dependencies needed for LAMMPS + pyiron workflows
@@ -10,7 +10,7 @@ set -euo pipefail
 # - build and install LAMMPS with the packages needed for the CuZr project
 #
 # Usage inside the container:
-#   bash startup_planb_pytorch28_cuda128.sh
+#   bash docker/startup_md.sh
 #
 # Optional environment variables:
 #   LAMMPS_BRANCH=develop
@@ -37,65 +37,51 @@ echo "==> Pip:    ${PIP_BIN}"
 python --version
 pip --version
 
+echo "==> Preflight checks"
+if command -v nvidia-smi >/dev/null 2>&1; then
+  nvidia-smi || true
+else
+  echo "WARNING: nvidia-smi not found. GPU runtime may not be attached yet."
+fi
+
+if command -v nvcc >/dev/null 2>&1; then
+  nvcc --version || true
+else
+  echo "WARNING: nvcc not found on PATH. This image may not be a CUDA devel image."
+fi
+
+python - <<'PY'
+import sys
+print("Python executable:", sys.executable)
+try:
+    import torch
+    print("Torch:", torch.__version__)
+    print("Torch CUDA available:", torch.cuda.is_available())
+    print("Torch CUDA version:", torch.version.cuda)
+except Exception as exc:
+    print("WARNING: torch preflight failed:", exc)
+PY
+
 echo "==> Installing system packages"
 apt-get update
-apt-get install -y --no-install-recommends \
-  build-essential \
-  gfortran \
-  git \
-  wget \
-  curl \
-  ca-certificates \
-  pkg-config \
-  cmake \
-  ninja-build \
-  openmpi-bin \
-  libopenmpi-dev \
-  libfftw3-dev \
-  libcurl4-openssl-dev \
-  libjpeg-dev \
-  libpng-dev \
-  libhdf5-dev \
-  libhdf5-openmpi-dev \
-  unzip \
-  bzip2 \
-  && rm -rf /var/lib/apt/lists/*
+apt-get install -y --no-install-recommends   build-essential   gfortran   git   wget   curl   ca-certificates   pkg-config   cmake   ninja-build   openmpi-bin   libopenmpi-dev   libfftw3-dev   libcurl4-openssl-dev   libjpeg-dev   libpng-dev   libhdf5-dev   libhdf5-openmpi-dev   unzip   bzip2   && rm -rf /var/lib/apt/lists/*
 
 echo "==> Upgrading pip build tooling"
 python -m pip install --no-cache-dir --upgrade pip setuptools wheel
 
 echo "==> Installing Python stack"
 # Keep numpy<2 to stay friendly with pyiron-related packages and older scientific deps.
-python -m pip install --no-cache-dir \
-  "numpy<2" \
-  scipy \
-  pandas \
-  matplotlib \
-  ase \
-  h5py \
-  mpi4py \
-  h5io \
-  sqlalchemy \
-  pysqa \
-  pyiron \
-  pyiron_base \
-  pyiron_atomistics \
-  pylammpsmpi \
-  structuretoolkit \
-  configargparse \
-  "e3nn==0.4.4" \
-  lmdb \
-  matscipy \
-  prettytable \
-  python-hostlist \
-  torch-ema \
-  torchmetrics \
-  "mace-torch==0.3.15" \
-  cuequivariance \
-  cuequivariance-torch \
-  cuequivariance-ops-torch-cu12 \
-  cupy-cuda12x \
-  kim-property
+python -m pip install --no-cache-dir   "numpy<2"   scipy   pandas   matplotlib   ase   h5py   mpi4py   h5io   sqlalchemy   pysqa   pyiron   pyiron_base   pyiron_atomistics   pylammpsmpi   structuretoolkit   configargparse   "e3nn==0.4.4"   lmdb   matscipy   prettytable   python-hostlist   torch-ema   torchmetrics   "mace-torch==0.3.15"   cuequivariance   cuequivariance-torch   cuequivariance-ops-torch-cu12   cupy-cuda12x   kim-property
+
+echo "==> Post-install Python sanity check"
+python - <<'PY'
+import numpy
+import torch
+import ase
+print("NumPy:", numpy.__version__)
+print("Torch:", torch.__version__)
+print("ASE:", ase.__version__)
+PY
 
 echo "==> Cloning LAMMPS"
 mkdir -p "$(dirname "${LAMMPS_SRC_DIR}")"
@@ -109,39 +95,7 @@ echo "==> Configuring LAMMPS"
 mkdir -p "${LAMMPS_BUILD_DIR}"
 cd "${LAMMPS_BUILD_DIR}"
 
-cmake -G Ninja "${LAMMPS_SRC_DIR}/cmake" \
-  -D CMAKE_BUILD_TYPE=Release \
-  -D CMAKE_INSTALL_PREFIX="${LAMMPS_INSTALL_DIR}" \
-  -D CMAKE_C_STANDARD=17 \
-  -D CMAKE_CXX_STANDARD=17 \
-  -D BUILD_MPI=ON \
-  -D BUILD_SHARED_LIBS=ON \
-  -D PKG_KIM=ON \
-  -D DOWNLOAD_KIM=ON \
-  -D PKG_ML-IAP=ON \
-  -D PKG_ML-SNAP=ON \
-  -D MLIAP_ENABLE_PYTHON=ON \
-  -D PKG_PYTHON=ON \
-  -D PKG_ML-PACE=ON \
-  -D PKG_KOKKOS=ON \
-  -D Kokkos_ENABLE_CUDA=ON \
-  -D Kokkos_ENABLE_SERIAL=ON \
-  ${GPU_ARCH_FLAG} \
-  -D PKG_MANYBODY=ON \
-  -D PKG_MEAM=ON \
-  -D PKG_KSPACE=ON \
-  -D PKG_EXTRA-COMPUTE=ON \
-  -D PKG_EXTRA-DUMP=ON \
-  -D PKG_EXTRA-FIX=ON \
-  -D PKG_EXTRA-MOLECULE=ON \
-  -D PKG_EXTRA-PAIR=ON \
-  -D PKG_MISC=ON \
-  -D PKG_REPLICA=ON \
-  -D PKG_RIGID=ON \
-  -D FFT=FFTW3 \
-  -D FFTW3_INCLUDE_DIR=/usr/include \
-  -D FFTW3_LIBRARY=/usr/lib/x86_64-linux-gnu/libfftw3.so \
-  -D Python_EXECUTABLE="${PYTHON_BIN}"
+cmake -G Ninja "${LAMMPS_SRC_DIR}/cmake"   -D CMAKE_BUILD_TYPE=Release   -D CMAKE_INSTALL_PREFIX="${LAMMPS_INSTALL_DIR}"   -D CMAKE_C_STANDARD=17   -D CMAKE_CXX_STANDARD=17   -D BUILD_MPI=ON   -D BUILD_SHARED_LIBS=ON   -D PKG_KIM=ON   -D DOWNLOAD_KIM=ON   -D PKG_ML-IAP=ON   -D PKG_ML-SNAP=ON   -D MLIAP_ENABLE_PYTHON=ON   -D PKG_PYTHON=ON   -D PKG_ML-PACE=ON   -D PKG_KOKKOS=ON   -D Kokkos_ENABLE_CUDA=ON   -D Kokkos_ENABLE_SERIAL=ON   ${GPU_ARCH_FLAG}   -D PKG_MANYBODY=ON   -D PKG_MEAM=ON   -D PKG_KSPACE=ON   -D PKG_EXTRA-COMPUTE=ON   -D PKG_EXTRA-DUMP=ON   -D PKG_EXTRA-FIX=ON   -D PKG_EXTRA-MOLECULE=ON   -D PKG_EXTRA-PAIR=ON   -D PKG_MISC=ON   -D PKG_REPLICA=ON   -D PKG_RIGID=ON   -D FFT=FFTW3   -D FFTW3_INCLUDE_DIR=/usr/include   -D FFTW3_LIBRARY=/usr/lib/x86_64-linux-gnu/libfftw3.so   -D Python_EXECUTABLE="${PYTHON_BIN}"
 
 echo "==> Building and installing LAMMPS"
 cmake --build . --parallel "${BUILD_JOBS}"
@@ -157,7 +111,7 @@ EOF
 export PATH="${LAMMPS_INSTALL_DIR}/bin:${PATH}"
 export LD_LIBRARY_PATH="${LAMMPS_INSTALL_DIR}/lib:${LD_LIBRARY_PATH:-}"
 
-echo "==> Basic verification"
+echo "==> Final verification"
 python - <<'PY'
 import sys
 import numpy
@@ -165,6 +119,7 @@ import torch
 print("Python:", sys.version.split()[0])
 print("NumPy:", numpy.__version__)
 print("Torch:", torch.__version__)
+print("Torch CUDA available:", torch.cuda.is_available())
 PY
 
 if command -v lmp >/dev/null 2>&1; then
