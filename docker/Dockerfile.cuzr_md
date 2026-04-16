@@ -1,0 +1,121 @@
+FROM nvidia/cuda:12.6.1-cudnn-devel-ubuntu22.04
+
+SHELL ["/bin/bash", "-lc"]
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    CUZR_ENV_PREFIX=/opt/cuzr-mamba \
+    MICROMAMBA_BIN=/usr/local/bin/micromamba \
+    PATH=/opt/cuzr-mamba/bin:$PATH
+
+ARG LAMMPS_REF=develop
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    gfortran \
+    git \
+    wget \
+    curl \
+    ca-certificates \
+    pkg-config \
+    cmake \
+    ninja-build \
+    openmpi-bin \
+    libopenmpi-dev \
+    libfftw3-dev \
+    libcurl4-openssl-dev \
+    libjpeg-dev \
+    libpng-dev \
+    libhdf5-dev \
+    libhdf5-openmpi-dev \
+    unzip \
+    bzip2 \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN curl -Ls https://micro.mamba.pm/api/micromamba/linux-64/latest \
+    | tar -xvj -C /tmp bin/micromamba \
+    && install -m 0755 /tmp/bin/micromamba "${MICROMAMBA_BIN}" \
+    && rm -rf /tmp/bin
+
+RUN "${MICROMAMBA_BIN}" create -y -p "${CUZR_ENV_PREFIX}" -c conda-forge \
+    python=3.11 \
+    pip \
+    numpy=1.26.4 \
+    scipy \
+    pandas \
+    matplotlib \
+    ase \
+    h5py \
+    mpi4py \
+    h5io \
+    sqlalchemy \
+    pysqa \
+    pyiron \
+    pyiron_base \
+    pyiron_atomistics \
+    pylammpsmpi \
+    structuretoolkit \
+    cython \
+    && "${MICROMAMBA_BIN}" clean --all --yes
+
+RUN "${CUZR_ENV_PREFIX}/bin/pip" install --no-cache-dir \
+    torch==2.10.0 torchvision==0.25.0 torchaudio==2.10.0 \
+    --index-url https://download.pytorch.org/whl/cu126
+
+RUN "${CUZR_ENV_PREFIX}/bin/pip" install --no-cache-dir \
+    numpy==1.26.4 \
+    cython \
+    configargparse==1.7.5 \
+    "e3nn==0.4.4" \
+    lmdb==2.2.0 \
+    matscipy==1.1.1 \
+    prettytable==3.17.0 \
+    python-hostlist==2.3.0 \
+    torch-ema==0.3 \
+    torchmetrics==1.9.0 \
+    "mace-torch==0.3.15" \
+    cuequivariance==0.9.1 \
+    cuequivariance-torch==0.9.1 \
+    cuequivariance-ops-torch-cu12==0.9.1 \
+    cupy-cuda12x==13.6.0 \
+    kim-property==2.6.14
+
+RUN "${CUZR_ENV_PREFIX}/bin/python" - <<'PY'
+import shutil
+import numpy
+import torch
+import Cython
+import ase
+
+print("Python OK")
+print("NumPy:", numpy.__version__)
+print("Torch:", torch.__version__)
+print("Cython:", Cython.__version__)
+print("ASE:", ase.__version__)
+print("cythonize:", shutil.which("cythonize"))
+
+assert numpy.__version__ == "1.26.4", numpy.__version__
+assert shutil.which("cythonize"), "cythonize not found"
+PY
+
+RUN rm -rf /opt/lammps /tmp/lammps.tar.gz \
+    && curl -L --fail "https://github.com/lammps/lammps/archive/refs/heads/${LAMMPS_REF}.tar.gz" -o /tmp/lammps.tar.gz \
+    && mkdir -p /opt \
+    && tar -xzf /tmp/lammps.tar.gz -C /opt \
+    && mv "/opt/lammps-${LAMMPS_REF}" /opt/lammps \
+    && rm /tmp/lammps.tar.gz
+
+RUN cat > /opt/cuzr_python_prebuilt.env <<'EOF'
+export CUZR_ENV_PREFIX=/opt/cuzr-mamba
+export PYTHON_BIN=/opt/cuzr-mamba/bin/python
+export PIP_BIN=/opt/cuzr-mamba/bin/pip
+export PATH=/opt/cuzr-mamba/bin:$PATH
+EOF
+
+RUN cat > /etc/profile.d/cuzr-env.sh <<'EOF'
+export CUZR_ENV_PREFIX=/opt/cuzr-mamba
+export PYTHON_BIN=/opt/cuzr-mamba/bin/python
+export PIP_BIN=/opt/cuzr-mamba/bin/pip
+export PATH=/opt/cuzr-mamba/bin:$PATH
+EOF
+
+WORKDIR /workspace
