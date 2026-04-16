@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# startup_md_conda_pyiron_v2.sh
+# startup_md_conda_pyiron_v3.sh
 #
 # Strategy:
 # - install system build deps with apt
@@ -149,11 +149,14 @@ echo "==> Installing MACE-related Python packages"
   cupy-cuda12x \
   kim-property
 
-echo "==> Verifying cythonize and NumPy pin"
+echo "==> Verifying Cython and NumPy pin"
 which cythonize
-cythonize --version
 "${PYTHON_BIN}" - <<'PY'
+import shutil
+import Cython
 import numpy
+print("cythonize:", shutil.which("cythonize"))
+print("Cython:", Cython.__version__)
 print("NumPy after MACE install:", numpy.__version__)
 assert numpy.__version__ == "1.26.4", f"Unexpected NumPy version: {numpy.__version__}"
 PY

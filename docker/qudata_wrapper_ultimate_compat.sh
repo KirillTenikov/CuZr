@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# qudata_wrapper_ultimate_compat_conda_v2.sh
+# qudata_wrapper_ultimate_compat_conda_v3.sh
 #
 # Compatibility wrapper for the current Paper 1 validation workflow.
 # Pairs with startup_md_conda_pyiron_v2.sh and expects /workspace/cuzr_python.env
