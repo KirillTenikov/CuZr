@@ -1,6 +1,21 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# startup_md_lammps.sh
+#
+# Assumes the Docker image already contains:
+# - /opt/cuzr-mamba Python env with pyiron + torch + MACE stack
+# - /opt/lammps source tree already unpacked
+#
+# This script only:
+# - verifies the baked env
+# - configures/builds/installs LAMMPS
+# - writes /workspace/cuzr_python.env for downstream scripts
+#
+# Updated version:
+# - KIM disabled to avoid the libcurl/KIM linker failure
+# - keeps ML-IAP / ML-SNAP / ML-PACE / PYTHON enabled for MACE + ACE workflows
+
 LAMMPS_SRC_DIR="${LAMMPS_SRC_DIR:-/opt/lammps}"
 LAMMPS_BUILD_DIR="${LAMMPS_BUILD_DIR:-/opt/lammps/build}"
 LAMMPS_INSTALL_DIR="${LAMMPS_INSTALL_DIR:-/opt/lammps-install}"
@@ -49,8 +64,8 @@ cmake -G Ninja "${LAMMPS_SRC_DIR}/cmake" \
   -D CMAKE_CXX_STANDARD=17 \
   -D BUILD_MPI=ON \
   -D BUILD_SHARED_LIBS=ON \
-  -D PKG_KIM=ON \
-  -D DOWNLOAD_KIM=ON \
+  -D PKG_KIM=OFF \
+  -D DOWNLOAD_KIM=OFF \
   -D PKG_ML-IAP=ON \
   -D PKG_ML-SNAP=ON \
   -D MLIAP_ENABLE_PYTHON=ON \
