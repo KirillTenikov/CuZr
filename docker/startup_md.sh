@@ -1,19 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# startup_md_conda_pyiron.sh
+# startup_md_conda_pyiron_v2.sh
 #
 # Strategy:
 # - install system build deps with apt
 # - install micromamba
-# - create a dedicated environment for pyiron via conda-forge
-# - install PyTorch 2.10.0 CUDA 12.6 wheels into that environment
-# - install MACE-related Python packages via pip into that environment
-# - build and install LAMMPS using that environment's Python
-#
-# Why:
-# - pyiron recommends conda on Linux
-# - pip resolution for pyiron_atomistics was failing with resolution-too-deep
+# - create a dedicated conda-forge env for pyiron + LAMMPS Python pieces
+# - install PyTorch CUDA 12.6 into that env
+# - install MACE-related Python packages into that env
+# - keep NumPy pinned to 1.26.4 to stay compatible with pyiron-side packages
+# - ensure cythonize is available for LAMMPS ML-IAP configure
+# - build and install LAMMPS using that env's Python
 #
 # Optional environment variables:
 #   LAMMPS_BRANCH=develop
@@ -75,7 +73,7 @@ if [ ! -x "${CUZR_ENV_PREFIX}/bin/python" ]; then
   "${MICROMAMBA_BIN}" create -y -p "${CUZR_ENV_PREFIX}" -c conda-forge \
     python=3.11 \
     pip \
-    "numpy<2" \
+    numpy=1.26.4 \
     scipy \
     pandas \
     matplotlib \
@@ -89,7 +87,8 @@ if [ ! -x "${CUZR_ENV_PREFIX}/bin/python" ]; then
     pyiron_base \
     pyiron_atomistics \
     pylammpsmpi \
-    structuretoolkit
+    structuretoolkit \
+    cython
 else
   echo "Environment already exists at ${CUZR_ENV_PREFIX}; skipping create"
 fi
@@ -114,6 +113,18 @@ if command -v nvcc >/dev/null 2>&1; then
   nvcc --version || true
 fi
 
+echo "==> Checking Python / Torch before installing PyTorch"
+"${PYTHON_BIN}" - <<'PY'
+import sys
+print("Python executable:", sys.executable)
+try:
+    import torch
+    print("Existing Torch:", torch.__version__)
+    print("Existing Torch CUDA available:", torch.cuda.is_available())
+except Exception as exc:
+    print("Torch not yet available in env:", exc)
+PY
+
 echo "==> Installing PyTorch CUDA 12.6 into the environment"
 "${PIP_BIN}" install --no-cache-dir \
   torch==2.10.0 torchvision==0.25.0 torchaudio==2.10.0 \
@@ -121,6 +132,8 @@ echo "==> Installing PyTorch CUDA 12.6 into the environment"
 
 echo "==> Installing MACE-related Python packages"
 "${PIP_BIN}" install --no-cache-dir \
+  numpy==1.26.4 \
+  cython \
   configargparse \
   "e3nn==0.4.4" \
   lmdb \
@@ -135,6 +148,15 @@ echo "==> Installing MACE-related Python packages"
   cuequivariance-ops-torch-cu12 \
   cupy-cuda12x \
   kim-property
+
+echo "==> Verifying cythonize and NumPy pin"
+which cythonize
+cythonize --version
+"${PYTHON_BIN}" - <<'PY'
+import numpy
+print("NumPy after MACE install:", numpy.__version__)
+assert numpy.__version__ == "1.26.4", f"Unexpected NumPy version: {numpy.__version__}"
+PY
 
 echo "==> Post-install Python sanity check"
 "${PYTHON_BIN}" - <<'PY'

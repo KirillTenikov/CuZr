@@ -1,15 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# qudata_wrapper_ultimate_compat_conda.sh
+# qudata_wrapper_ultimate_compat_conda_v2.sh
 #
-# Same overall flow as the compatibility wrapper, but after startup it sources
-# the Python/LAMMPS environment helper written by startup_md_conda_pyiron.sh.
-#
-# Important:
-# - creates exact legacy-compatible MACE aliases expected by the current
-#   Paper 1 validation script
-# - uses the conda/micromamba Python created by startup_md_conda_pyiron.sh
+# Compatibility wrapper for the current Paper 1 validation workflow.
+# Pairs with startup_md_conda_pyiron_v2.sh and expects /workspace/cuzr_python.env
+# to be written by startup.
 
 REPO_URL="${REPO_URL:-https://github.com/KirillTenikov/CuZr.git}"
 REPO_BRANCH="${REPO_BRANCH:-master}"
@@ -264,8 +260,7 @@ convert_all_mace_models() {
   local pyexe="${PYTHON_BIN:-python}"
   log "Checking Python / torch before MACE conversion"
   "${pyexe}" - <<'PY'
-import sys
-import torch
+import sys, torch
 print("Python:", sys.version.split()[0])
 print("Torch:", torch.__version__)
 print("Torch CUDA available:", torch.cuda.is_available())
