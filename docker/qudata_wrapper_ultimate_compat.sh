@@ -1,24 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Ultimate qudata wrapper for instance initialization.
+# qudata_wrapper_ultimate_compat_conda.sh
 #
-# This version is aligned with the current Paper 1 validation workflow:
-# - Creates exact legacy-compatible MACE filenames expected by
-#   scripts/paper1_validate_potentials.py:
-#     CuZr_MACE_A_compiled.model-lammps.pt
-#     CuZr_MACE_B_compiled.model-lammps.pt
-#     CuZr_MACE_C_compiled.model-lammps.pt
-#     CuZr_MACE_D_compiled.model-lammps.pt
-# - Exports ACE model file paths via:
-#     CUZR_ACE_514_FILE
-#     CUZR_ACE_1352_FILE
-# - Mirrors those files into a pyiron-facing resource tree
-# - Creates ~/.pyiron and project/resource directories
+# Same overall flow as the compatibility wrapper, but after startup it sources
+# the Python/LAMMPS environment helper written by startup_md_conda_pyiron.sh.
 #
-# Important note:
-# The current validation helper still uses the legacy custom MACE registration
-# style (pair_style mace), so this wrapper keeps the legacy-compatible names.
+# Important:
+# - creates exact legacy-compatible MACE aliases expected by the current
+#   Paper 1 validation script
+# - uses the conda/micromamba Python created by startup_md_conda_pyiron.sh
 
 REPO_URL="${REPO_URL:-https://github.com/KirillTenikov/CuZr.git}"
 REPO_BRANCH="${REPO_BRANCH:-master}"
@@ -39,18 +30,15 @@ POTENTIALS_EAM_DIR="${POTENTIALS_EAM_DIR:-${POTENTIALS_ROOT}/eam}"
 
 DATA_DIR="${DATA_DIR:-${WORKSPACE_ROOT}/data}"
 
-# Repo-local convenience paths
 SYNC_POTENTIALS_INTO_REPO="${SYNC_POTENTIALS_INTO_REPO:-1}"
 REPO_RUNTIME_DIR="${REPO_RUNTIME_DIR:-${REPO_DIR}/runtime}"
 REPO_POTENTIALS_DIR="${REPO_POTENTIALS_DIR:-${REPO_RUNTIME_DIR}/potentials}"
 
-# Validation-script-compatible aliases in repo root
 REPO_MACE_A_ALIAS="${REPO_MACE_A_ALIAS:-${REPO_DIR}/CuZr_MACE_A_compiled.model-lammps.pt}"
 REPO_MACE_B_ALIAS="${REPO_MACE_B_ALIAS:-${REPO_DIR}/CuZr_MACE_B_compiled.model-lammps.pt}"
 REPO_MACE_C_ALIAS="${REPO_MACE_C_ALIAS:-${REPO_DIR}/CuZr_MACE_C_compiled.model-lammps.pt}"
 REPO_MACE_D_ALIAS="${REPO_MACE_D_ALIAS:-${REPO_DIR}/CuZr_MACE_D_compiled.model-lammps.pt}"
 
-# pyiron layout
 PYIRON_ROOT="${PYIRON_ROOT:-${WORKSPACE_ROOT}/pyiron}"
 PYIRON_PROJECTS_DIR="${PYIRON_PROJECTS_DIR:-${PYIRON_ROOT}/projects}"
 PYIRON_RESOURCES_DIR="${PYIRON_RESOURCES_DIR:-${PYIRON_ROOT}/resources}"
@@ -71,8 +59,8 @@ FORCE_REDOWNLOAD="${FORCE_REDOWNLOAD:-0}"
 
 STARTUP_SCRIPT_REL="${STARTUP_SCRIPT_REL:-docker/startup_md.sh}"
 STARTUP_SCRIPT="${REPO_DIR}/${STARTUP_SCRIPT_REL}"
+PYTHON_ENV_FILE="${PYTHON_ENV_FILE:-/workspace/cuzr_python.env}"
 
-# Names of uploaded release assets
 MACE_A_NAME="${MACE_A_NAME:-mace_A.model}"
 MACE_B_NAME="${MACE_B_NAME:-mace_B.model}"
 MACE_C_NAME="${MACE_C_NAME:-mace_C.model}"
@@ -80,7 +68,6 @@ MACE_D_NAME="${MACE_D_NAME:-mace_D.model}"
 ACE_514_NAME="${ACE_514_NAME:-ace_514.yaml}"
 ACE_1352_NAME="${ACE_1352_NAME:-ace_1352.yaml}"
 
-# Converted canonical names stored under /workspace/models/converted
 CANONICAL_MACE_A_NAME="${CANONICAL_MACE_A_NAME:-mace_A-mliap_lammps.pt}"
 CANONICAL_MACE_B_NAME="${CANONICAL_MACE_B_NAME:-mace_B-mliap_lammps.pt}"
 CANONICAL_MACE_C_NAME="${CANONICAL_MACE_C_NAME:-mace_C-mliap_lammps.pt}"
@@ -88,13 +75,11 @@ CANONICAL_MACE_D_NAME="${CANONICAL_MACE_D_NAME:-mace_D-mliap_lammps.pt}"
 CANONICAL_ACE_514_NAME="${CANONICAL_ACE_514_NAME:-ace_514.yaml}"
 CANONICAL_ACE_1352_NAME="${CANONICAL_ACE_1352_NAME:-ace_1352.yaml}"
 
-# Exact legacy-compatible filenames expected by the validation driver / helper
 VALIDATION_MACE_A_NAME="${VALIDATION_MACE_A_NAME:-CuZr_MACE_A_compiled.model-lammps.pt}"
 VALIDATION_MACE_B_NAME="${VALIDATION_MACE_B_NAME:-CuZr_MACE_B_compiled.model-lammps.pt}"
 VALIDATION_MACE_C_NAME="${VALIDATION_MACE_C_NAME:-CuZr_MACE_C_compiled.model-lammps.pt}"
 VALIDATION_MACE_D_NAME="${VALIDATION_MACE_D_NAME:-CuZr_MACE_D_compiled.model-lammps.pt}"
 
-# Optional validation-facing ACE aliases if you want stable names too
 VALIDATION_ACE_514_NAME="${VALIDATION_ACE_514_NAME:-CuZr_ACE_514.yace}"
 VALIDATION_ACE_1352_NAME="${VALIDATION_ACE_1352_NAME:-CuZr_ACE_1352.yace}"
 
@@ -125,40 +110,36 @@ PYIRON_ENV_FILE="${PYIRON_ROOT}/pyiron_paths.env"
 READY_SUMMARY_TXT="${LOG_DIR}/validation_ready.txt"
 PYIRON_NOTE_TXT="${PYIRON_LAMMPS_POT_DIR}/README_custom_potentials.txt"
 
-mkdir -p   "${LOG_DIR}"   "${MARKER_DIR}"   "${RAW_MODELS_DIR}"   "${CONVERTED_MODELS_DIR}"   "${POTENTIALS_MACE_DIR}"   "${POTENTIALS_ACE_DIR}"   "${POTENTIALS_EAM_DIR}"   "${DATA_DIR}"   "${PYIRON_PROJECTS_DIR}"   "${PYIRON_LAMMPS_BIN_DIR}"   "${PYIRON_LAMMPS_POT_DIR}"
+mkdir -p \
+  "${LOG_DIR}" \
+  "${MARKER_DIR}" \
+  "${RAW_MODELS_DIR}" \
+  "${CONVERTED_MODELS_DIR}" \
+  "${POTENTIALS_MACE_DIR}" \
+  "${POTENTIALS_ACE_DIR}" \
+  "${POTENTIALS_EAM_DIR}" \
+  "${DATA_DIR}" \
+  "${PYIRON_PROJECTS_DIR}" \
+  "${PYIRON_LAMMPS_BIN_DIR}" \
+  "${PYIRON_LAMMPS_POT_DIR}"
 
 exec > >(tee -a "${LOG_DIR}/wrapper.log") 2>&1
 
-timestamp() {
-  date "+%Y-%m-%d %H:%M:%S"
-}
-
-log() {
-  echo "[$(timestamp)] $*"
-}
-
-fail() {
-  log "ERROR: $*"
-  exit 1
-}
-
-require_command() {
-  command -v "$1" >/dev/null 2>&1 || fail "Required command not found: $1"
-}
+timestamp() { date "+%Y-%m-%d %H:%M:%S"; }
+log() { echo "[$(timestamp)] $*"; }
+fail() { log "ERROR: $*"; exit 1; }
+require_command() { command -v "$1" >/dev/null 2>&1 || fail "Required command not found: $1"; }
 
 download_if_missing() {
   local url="$1"
   local out="$2"
-
   if [[ -z "${url}" ]]; then
     fail "No download URL provided for ${out}"
   fi
-
   if [[ -f "${out}" && "${FORCE_REDOWNLOAD}" != "1" ]]; then
     log "Already exists, skipping: ${out}"
     return 0
   fi
-
   mkdir -p "$(dirname "${out}")"
   log "Downloading ${url} -> ${out}"
   curl -L --fail --retry 5 --retry-delay 5 --retry-connrefused -o "${out}" "${url}"
@@ -167,7 +148,6 @@ download_if_missing() {
 build_release_url() {
   local base_url="$1"
   local filename="$2"
-
   if [[ -z "${base_url}" ]]; then
     echo ""
   else
@@ -178,7 +158,6 @@ build_release_url() {
 make_link() {
   local src="$1"
   local dst="$2"
-
   [[ -e "${src}" ]] || fail "Cannot link missing source: ${src}"
   mkdir -p "$(dirname "${dst}")"
   ln -sfn "${src}" "${dst}"
@@ -187,7 +166,6 @@ make_link() {
 
 clone_or_update_repo() {
   require_command git
-
   if [[ ! -d "${REPO_DIR}/.git" ]]; then
     log "Cloning repo: ${REPO_URL} -> ${REPO_DIR}"
     git clone --branch "${REPO_BRANCH}" "${REPO_URL}" "${REPO_DIR}"
@@ -197,27 +175,23 @@ clone_or_update_repo() {
     git -C "${REPO_DIR}" checkout "${REPO_BRANCH}"
     git -C "${REPO_DIR}" pull --ff-only origin "${REPO_BRANCH}"
   fi
-
   log "Repo HEAD: $(git -C "${REPO_DIR}" rev-parse --short HEAD)"
 }
 
 download_model_assets() {
   require_command curl
-
   local mace_a_url="${MACE_A_URL:-$(build_release_url "${MODEL_BASE_URL}" "${MACE_A_NAME}")}"
   local mace_b_url="${MACE_B_URL:-$(build_release_url "${MODEL_BASE_URL}" "${MACE_B_NAME}")}"
   local mace_c_url="${MACE_C_URL:-$(build_release_url "${MODEL_BASE_URL}" "${MACE_C_NAME}")}"
   local mace_d_url="${MACE_D_URL:-$(build_release_url "${MODEL_BASE_URL}" "${MACE_D_NAME}")}"
   local ace_514_url="${ACE_514_URL:-$(build_release_url "${MODEL_BASE_URL}" "${ACE_514_NAME}")}"
   local ace_1352_url="${ACE_1352_URL:-$(build_release_url "${MODEL_BASE_URL}" "${ACE_1352_NAME}")}"
-
   download_if_missing "${mace_a_url}" "${RAW_MODELS_DIR}/${MACE_A_NAME}"
   download_if_missing "${mace_b_url}" "${RAW_MODELS_DIR}/${MACE_B_NAME}"
   download_if_missing "${mace_c_url}" "${RAW_MODELS_DIR}/${MACE_C_NAME}"
   download_if_missing "${mace_d_url}" "${RAW_MODELS_DIR}/${MACE_D_NAME}"
   download_if_missing "${ace_514_url}" "${RAW_MODELS_DIR}/${ACE_514_NAME}"
   download_if_missing "${ace_1352_url}" "${RAW_MODELS_DIR}/${ACE_1352_NAME}"
-
   log "Raw model directory contents:"
   ls -lh "${RAW_MODELS_DIR}"
 }
@@ -227,53 +201,51 @@ download_dataset_assets() {
     log "Dataset download disabled"
     return 0
   fi
-
   require_command curl
-
   local train_url="${TRAIN_SPLIT_URL:-$(build_release_url "${DATA_BASE_URL}" "${TRAIN_SPLIT_NAME}")}"
   local valid_url="${VALID_SPLIT_URL:-$(build_release_url "${DATA_BASE_URL}" "${VALID_SPLIT_NAME}")}"
   local test_url="${TEST_URL:-$(build_release_url "${DATA_BASE_URL}" "${TEST_NAME}")}"
-
   download_if_missing "${train_url}" "${DATA_DIR}/${TRAIN_SPLIT_NAME}"
   download_if_missing "${valid_url}" "${DATA_DIR}/${VALID_SPLIT_NAME}"
   download_if_missing "${test_url}" "${DATA_DIR}/${TEST_NAME}"
-
   log "Data directory contents:"
   ls -lh "${DATA_DIR}"
 }
 
 run_startup_md() {
   [[ -f "${STARTUP_SCRIPT}" ]] || fail "Startup script not found: ${STARTUP_SCRIPT}"
-
   if [[ -f "${STARTUP_DONE_MARKER}" ]]; then
     log "startup_md already completed earlier"
-    return 0
+  else
+    log "Running startup script: ${STARTUP_SCRIPT}"
+    chmod +x "${STARTUP_SCRIPT}"
+    bash "${STARTUP_SCRIPT}"
+    touch "${STARTUP_DONE_MARKER}"
+    log "startup_md finished successfully"
   fi
-
-  log "Running startup script: ${STARTUP_SCRIPT}"
-  chmod +x "${STARTUP_SCRIPT}"
-  bash "${STARTUP_SCRIPT}"
-  touch "${STARTUP_DONE_MARKER}"
-  log "startup_md finished successfully"
+  if [[ -f "${PYTHON_ENV_FILE}" ]]; then
+    # shellcheck disable=SC1090
+    . "${PYTHON_ENV_FILE}"
+    log "Sourced Python/LAMMPS env helper: ${PYTHON_ENV_FILE}"
+    log "Using PYTHON_BIN=${PYTHON_BIN:-python}"
+  else
+    fail "Expected Python env helper missing: ${PYTHON_ENV_FILE}"
+  fi
 }
 
 convert_mace_if_needed() {
   local raw_model="$1"
   local converted_target="$2"
-
+  local pyexe="${PYTHON_BIN:-python}"
   [[ -f "${raw_model}" ]] || fail "Raw MACE model not found: ${raw_model}"
-
   if [[ -f "${converted_target}" && "${FORCE_REDOWNLOAD}" != "1" ]]; then
     log "Already converted: ${converted_target}"
     return 0
   fi
-
-  log "Converting MACE model: ${raw_model}"
-  python -m mace.cli.create_lammps_model "${raw_model}" --format=mliap
-
+  log "Converting MACE model with ${pyexe}: ${raw_model}"
+  "${pyexe}" -m mace.cli.create_lammps_model "${raw_model}" --format=mliap
   local produced="${raw_model}-mliap_lammps.pt"
   [[ -f "${produced}" ]] || fail "Expected converted model missing: ${produced}"
-
   if [[ "${produced}" != "${converted_target}" ]]; then
     mv -f "${produced}" "${converted_target}"
     log "Moved converted model to canonical converted path: ${converted_target}"
@@ -285,32 +257,25 @@ convert_all_mace_models() {
     log "MACE conversion disabled"
     return 0
   fi
-
   if [[ -f "${CONVERSION_DONE_MARKER}" ]]; then
     log "MACE conversion already completed earlier"
     return 0
   fi
-
+  local pyexe="${PYTHON_BIN:-python}"
   log "Checking Python / torch before MACE conversion"
-  python - <<'PY'
+  "${pyexe}" - <<'PY'
 import sys
-try:
-    import torch
-    print("Python:", sys.version.split()[0])
-    print("Torch:", torch.__version__)
-    print("Torch CUDA available:", torch.cuda.is_available())
-    print("Torch CUDA version:", torch.version.cuda)
-except Exception as exc:
-    print("WARNING: torch preflight for MACE conversion failed:", exc)
+import torch
+print("Python:", sys.version.split()[0])
+print("Torch:", torch.__version__)
+print("Torch CUDA available:", torch.cuda.is_available())
+print("Torch CUDA version:", torch.version.cuda)
 PY
-
   convert_mace_if_needed "${RAW_MODELS_DIR}/${MACE_A_NAME}" "${CONVERTED_MODELS_DIR}/${CANONICAL_MACE_A_NAME}"
   convert_mace_if_needed "${RAW_MODELS_DIR}/${MACE_B_NAME}" "${CONVERTED_MODELS_DIR}/${CANONICAL_MACE_B_NAME}"
   convert_mace_if_needed "${RAW_MODELS_DIR}/${MACE_C_NAME}" "${CONVERTED_MODELS_DIR}/${CANONICAL_MACE_C_NAME}"
   convert_mace_if_needed "${RAW_MODELS_DIR}/${MACE_D_NAME}" "${CONVERTED_MODELS_DIR}/${CANONICAL_MACE_D_NAME}"
-
   touch "${CONVERSION_DONE_MARKER}"
-
   log "Converted MACE models:"
   ls -lh "${CONVERTED_MODELS_DIR}"
 }
@@ -320,34 +285,26 @@ create_canonical_potential_paths() {
     log "Canonical potential paths already prepared earlier"
     return 0
   fi
-
-  # Canonical MACE links
   make_link "${CONVERTED_MODELS_DIR}/${CANONICAL_MACE_A_NAME}" "${POTENTIALS_MACE_DIR}/${CANONICAL_MACE_A_NAME}"
   make_link "${CONVERTED_MODELS_DIR}/${CANONICAL_MACE_B_NAME}" "${POTENTIALS_MACE_DIR}/${CANONICAL_MACE_B_NAME}"
   make_link "${CONVERTED_MODELS_DIR}/${CANONICAL_MACE_C_NAME}" "${POTENTIALS_MACE_DIR}/${CANONICAL_MACE_C_NAME}"
   make_link "${CONVERTED_MODELS_DIR}/${CANONICAL_MACE_D_NAME}" "${POTENTIALS_MACE_DIR}/${CANONICAL_MACE_D_NAME}"
 
-  # Validation-driver-compatible MACE aliases
   make_link "${POTENTIALS_MACE_DIR}/${CANONICAL_MACE_A_NAME}" "${POTENTIALS_MACE_DIR}/${VALIDATION_MACE_A_NAME}"
   make_link "${POTENTIALS_MACE_DIR}/${CANONICAL_MACE_B_NAME}" "${POTENTIALS_MACE_DIR}/${VALIDATION_MACE_B_NAME}"
   make_link "${POTENTIALS_MACE_DIR}/${CANONICAL_MACE_C_NAME}" "${POTENTIALS_MACE_DIR}/${VALIDATION_MACE_C_NAME}"
   make_link "${POTENTIALS_MACE_DIR}/${CANONICAL_MACE_D_NAME}" "${POTENTIALS_MACE_DIR}/${VALIDATION_MACE_D_NAME}"
 
-  # Canonical ACE links
   make_link "${RAW_MODELS_DIR}/${ACE_514_NAME}" "${POTENTIALS_ACE_DIR}/${CANONICAL_ACE_514_NAME}"
   make_link "${RAW_MODELS_DIR}/${ACE_1352_NAME}" "${POTENTIALS_ACE_DIR}/${CANONICAL_ACE_1352_NAME}"
-
-  # Optional ACE validation aliases
   make_link "${POTENTIALS_ACE_DIR}/${CANONICAL_ACE_514_NAME}" "${POTENTIALS_ACE_DIR}/${VALIDATION_ACE_514_NAME}"
   make_link "${POTENTIALS_ACE_DIR}/${CANONICAL_ACE_1352_NAME}" "${POTENTIALS_ACE_DIR}/${VALIDATION_ACE_1352_NAME}"
 
-  # Repo-root aliases so the validation driver defaults resolve immediately
   make_link "${POTENTIALS_MACE_DIR}/${VALIDATION_MACE_A_NAME}" "${REPO_MACE_A_ALIAS}"
   make_link "${POTENTIALS_MACE_DIR}/${VALIDATION_MACE_B_NAME}" "${REPO_MACE_B_ALIAS}"
   make_link "${POTENTIALS_MACE_DIR}/${VALIDATION_MACE_C_NAME}" "${REPO_MACE_C_ALIAS}"
   make_link "${POTENTIALS_MACE_DIR}/${VALIDATION_MACE_D_NAME}" "${REPO_MACE_D_ALIAS}"
 
-  # Optional repo-local sync under runtime/
   if [[ "${SYNC_POTENTIALS_INTO_REPO}" == "1" ]]; then
     mkdir -p "${REPO_POTENTIALS_DIR}/mace" "${REPO_POTENTIALS_DIR}/ace" "${REPO_POTENTIALS_DIR}/eam"
     make_link "${POTENTIALS_MACE_DIR}/${VALIDATION_MACE_A_NAME}" "${REPO_POTENTIALS_DIR}/mace/${VALIDATION_MACE_A_NAME}"
@@ -371,10 +328,7 @@ setup_pyiron_layout() {
     log "pyiron layout already prepared earlier"
     return 0
   fi
-
   mkdir -p "${PYIRON_PROJECTS_DIR}" "${PYIRON_LAMMPS_BIN_DIR}" "${PYIRON_LAMMPS_POT_DIR}"
-
-  # ~/.pyiron config
   cat > "${PYIRON_CONFIG_FILE}" <<EOF
 [DEFAULT]
 FILE = ${PYIRON_DB_FILE}
@@ -382,9 +336,7 @@ PROJECT_PATHS = ${PYIRON_PROJECTS_DIR}
 RESOURCE_PATHS = ${PYIRON_RESOURCES_DIR}
 PROJECT_CHECK_ENABLED = ${PYIRON_PROJECT_CHECK_ENABLED}
 EOF
-  log "Wrote pyiron config: ${PYIRON_CONFIG_FILE}"
 
-  # Helper env file
   cat > "${PYIRON_ENV_FILE}" <<EOF
 export PYIRONCONFIG="${PYIRON_CONFIG_FILE}"
 export PYIRONPROJECTPATHS="${PYIRON_PROJECTS_DIR}"
@@ -394,9 +346,7 @@ export PYIRON_RESOURCES_DIR="${PYIRON_RESOURCES_DIR}"
 export PYIRON_LAMMPS_BIN_DIR="${PYIRON_LAMMPS_BIN_DIR}"
 export PYIRON_LAMMPS_POT_DIR="${PYIRON_LAMMPS_POT_DIR}"
 EOF
-  log "Wrote pyiron env file: ${PYIRON_ENV_FILE}"
 
-  # Launcher scripts
   cat > "${PYIRON_LAMMPS_BIN_DIR}/run_lammps_custom.sh" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -412,15 +362,12 @@ mpiexec -n "${NCORES}" lmp -in control.inp
 EOF
   chmod +x "${PYIRON_LAMMPS_BIN_DIR}/run_lammps_custom_mpi.sh"
 
-  # Mirror exact validation-compatible filenames into pyiron resource tree
   make_link "${POTENTIALS_MACE_DIR}/${VALIDATION_MACE_A_NAME}" "${PYIRON_LAMMPS_POT_DIR}/${VALIDATION_MACE_A_NAME}"
   make_link "${POTENTIALS_MACE_DIR}/${VALIDATION_MACE_B_NAME}" "${PYIRON_LAMMPS_POT_DIR}/${VALIDATION_MACE_B_NAME}"
   make_link "${POTENTIALS_MACE_DIR}/${VALIDATION_MACE_C_NAME}" "${PYIRON_LAMMPS_POT_DIR}/${VALIDATION_MACE_C_NAME}"
   make_link "${POTENTIALS_MACE_DIR}/${VALIDATION_MACE_D_NAME}" "${PYIRON_LAMMPS_POT_DIR}/${VALIDATION_MACE_D_NAME}"
   make_link "${POTENTIALS_ACE_DIR}/${CANONICAL_ACE_514_NAME}" "${PYIRON_LAMMPS_POT_DIR}/${CANONICAL_ACE_514_NAME}"
   make_link "${POTENTIALS_ACE_DIR}/${CANONICAL_ACE_1352_NAME}" "${PYIRON_LAMMPS_POT_DIR}/${CANONICAL_ACE_1352_NAME}"
-
-  # Optional ACE aliases in pyiron resource tree too
   make_link "${POTENTIALS_ACE_DIR}/${CANONICAL_ACE_514_NAME}" "${PYIRON_LAMMPS_POT_DIR}/${VALIDATION_ACE_514_NAME}"
   make_link "${POTENTIALS_ACE_DIR}/${CANONICAL_ACE_1352_NAME}" "${PYIRON_LAMMPS_POT_DIR}/${VALIDATION_ACE_1352_NAME}"
 
@@ -442,11 +389,6 @@ Important compatibility note:
 - ACE file paths are also exported through:
     CUZR_ACE_514_FILE
     CUZR_ACE_1352_FILE
-
-Note:
-- A custom potentials_lammps.csv is NOT generated here.
-- This setup is enough when the validation code uses explicit filenames / custom
-  DataFrames, which is how the current helper is structured.
 EOF
 
   touch "${PYIRON_DONE_MARKER}"
@@ -480,9 +422,8 @@ export CUZR_ACE_514_FILE="${POTENTIALS_ACE_DIR}/${CANONICAL_ACE_514_NAME}"
 export CUZR_ACE_1352_FILE="${POTENTIALS_ACE_DIR}/${CANONICAL_ACE_1352_NAME}"
 
 export REPO_RUNTIME_POTENTIALS_DIR="${REPO_POTENTIALS_DIR}"
+export PYTHON_ENV_FILE="${PYTHON_ENV_FILE}"
 EOF
-
-  log "Wrote potential env file: ${POTENTIALS_ENV_FILE}"
 }
 
 write_potential_manifest_json() {
@@ -493,6 +434,7 @@ write_potential_manifest_json() {
   "raw_models_dir": "${RAW_MODELS_DIR}",
   "converted_models_dir": "${CONVERTED_MODELS_DIR}",
   "potentials_root": "${POTENTIALS_ROOT}",
+  "python_env_file": "${PYTHON_ENV_FILE}",
   "mace": {
     "canonical": {
       "mace_A": "${POTENTIALS_MACE_DIR}/${CANONICAL_MACE_A_NAME}",
@@ -518,18 +460,9 @@ write_potential_manifest_json() {
     "resources_dir": "${PYIRON_RESOURCES_DIR}",
     "lammps_bin_dir": "${PYIRON_LAMMPS_BIN_DIR}",
     "lammps_potential_dir": "${PYIRON_LAMMPS_POT_DIR}"
-  },
-  "repo_root_aliases": {
-    "MACE_A": "${REPO_MACE_A_ALIAS}",
-    "MACE_B": "${REPO_MACE_B_ALIAS}",
-    "MACE_C": "${REPO_MACE_C_ALIAS}",
-    "MACE_D": "${REPO_MACE_D_ALIAS}"
-  },
-  "repo_runtime_potentials_dir": "${REPO_POTENTIALS_DIR}"
+  }
 }
 EOF
-
-  log "Wrote potential manifest: ${POTENTIALS_MANIFEST_JSON}"
 }
 
 write_ready_summary() {
@@ -553,6 +486,9 @@ Canonical potentials:
   ACE 514:   ${POTENTIALS_ACE_DIR}/${CANONICAL_ACE_514_NAME}
   ACE 1352:  ${POTENTIALS_ACE_DIR}/${CANONICAL_ACE_1352_NAME}
 
+Python env helper:
+  ${PYTHON_ENV_FILE}
+
 pyiron:
   Config:       ${PYIRON_CONFIG_FILE}
   DB:           ${PYIRON_DB_FILE}
@@ -561,20 +497,13 @@ pyiron:
   LAMMPS bin:   ${PYIRON_LAMMPS_BIN_DIR}
   LAMMPS pots:  ${PYIRON_LAMMPS_POT_DIR}
 
-Support files:
-  Potential env:    ${POTENTIALS_ENV_FILE}
-  pyiron env:       ${PYIRON_ENV_FILE}
-  JSON manifest:    ${POTENTIALS_MANIFEST_JSON}
-  pyiron note:      ${PYIRON_NOTE_TXT}
-
 Typical next step:
   cd ${REPO_DIR}
+  source ${PYTHON_ENV_FILE}
   source ${POTENTIALS_ENV_FILE}
   source ${PYIRON_ENV_FILE}
   python scripts/paper1_validate_potentials.py
 EOF
-
-  log "Wrote validation-ready summary: ${READY_SUMMARY_TXT}"
 }
 
 final_summary() {
@@ -585,47 +514,35 @@ final_summary() {
   log "Potentials root:    ${POTENTIALS_ROOT}"
   log "pyiron projects:    ${PYIRON_PROJECTS_DIR}"
   log "pyiron resources:   ${PYIRON_RESOURCES_DIR}"
-
   if command -v lmp >/dev/null 2>&1; then
     log "LAMMPS executable: $(command -v lmp)"
   else
     log "WARNING: lmp not found on PATH"
   fi
-
-  if command -v python >/dev/null 2>&1; then
-    python - <<'PY'
-import os
-try:
-    import torch
-    print("Torch:", torch.__version__)
-    print("Torch CUDA available:", torch.cuda.is_available())
-    print("CUZR_ACE_514_FILE:", os.environ.get("CUZR_ACE_514_FILE", "<not exported in current shell>"))
-except Exception as exc:
-    print("WARNING: final torch check failed:", exc)
+  local pyexe="${PYTHON_BIN:-python}"
+  "${pyexe}" - <<'PY'
+import os, torch
+print("Torch:", torch.__version__)
+print("Torch CUDA available:", torch.cuda.is_available())
+print("PYTHON_BIN:", os.environ.get("PYTHON_BIN", "<unset>"))
 PY
-  fi
-
   touch "${WRAPPER_DONE_MARKER}"
 }
 
 main() {
   log "Wrapper started"
-
   clone_or_update_repo
   download_model_assets
   download_dataset_assets
-
   if [[ "${RUN_STARTUP_MD}" == "1" ]]; then
     run_startup_md
   else
     log "RUN_STARTUP_MD=0, skipping startup_md"
   fi
-
   convert_all_mace_models
   create_canonical_potential_paths
   setup_pyiron_layout
   final_summary
-
   log "Wrapper finished successfully"
 }
 

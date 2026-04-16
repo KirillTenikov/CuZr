@@ -1,21 +1,19 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Startup/setup script for a container based on:
-#   pytorch/pytorch:2.10.0-cuda12.6-cudnn9-devel
+# startup_md_conda_pyiron.sh
 #
-# Goal:
-# - install system dependencies needed for LAMMPS + pyiron workflows
-# - install Python packages needed for MACE/pyiron analysis
-# - build and install LAMMPS with the packages needed for the CuZr project
+# Strategy:
+# - install system build deps with apt
+# - install micromamba
+# - create a dedicated environment for pyiron via conda-forge
+# - install PyTorch 2.10.0 CUDA 12.6 wheels into that environment
+# - install MACE-related Python packages via pip into that environment
+# - build and install LAMMPS using that environment's Python
 #
-# Main fix in this version:
-# - avoid Ubuntu's externally-managed system Python
-# - create a dedicated venv with --system-site-packages
-# - reuse the image's preinstalled Torch/CUDA stack inside that venv
-#
-# Usage inside the container:
-#   bash docker/startup_md.sh
+# Why:
+# - pyiron recommends conda on Linux
+# - pip resolution for pyiron_atomistics was failing with resolution-too-deep
 #
 # Optional environment variables:
 #   LAMMPS_BRANCH=develop
@@ -24,6 +22,8 @@ set -euo pipefail
 #   LAMMPS_INSTALL_DIR=/opt/lammps-install
 #   BUILD_JOBS=4
 #   GPU_ARCH_FLAG=-DKokkos_ARCH_AMPERE80=ON
+#   CUZR_ENV_PREFIX=/opt/cuzr-mamba
+#   PYTHON_ENV_FILE=/workspace/cuzr_python.env
 
 export DEBIAN_FRONTEND=noninteractive
 
@@ -33,6 +33,9 @@ LAMMPS_BUILD_DIR="${LAMMPS_BUILD_DIR:-/opt/lammps/build}"
 LAMMPS_INSTALL_DIR="${LAMMPS_INSTALL_DIR:-/opt/lammps-install}"
 BUILD_JOBS="${BUILD_JOBS:-4}"
 GPU_ARCH_FLAG="${GPU_ARCH_FLAG:--DKokkos_ARCH_AMPERE80=ON}"
+CUZR_ENV_PREFIX="${CUZR_ENV_PREFIX:-/opt/cuzr-mamba}"
+PYTHON_ENV_FILE="${PYTHON_ENV_FILE:-/workspace/cuzr_python.env}"
+MICROMAMBA_BIN="${MICROMAMBA_BIN:-/usr/local/bin/micromamba}"
 
 echo "==> Installing system packages"
 apt-get update
@@ -56,17 +59,47 @@ apt-get install -y --no-install-recommends \
   libhdf5-openmpi-dev \
   unzip \
   bzip2 \
-  python3-venv \
   && rm -rf /var/lib/apt/lists/*
 
-echo "==> Creating Python venv with system site packages"
-python3 -m venv --system-site-packages /opt/cuzr-venv
-PYTHON_BIN=/opt/cuzr-venv/bin/python
-PIP_BIN=/opt/cuzr-venv/bin/pip
+echo "==> Installing micromamba"
+if [ ! -x "${MICROMAMBA_BIN}" ]; then
+  curl -Ls https://micro.mamba.pm/api/micromamba/linux-64/latest \
+    | tar -xvj -C /tmp bin/micromamba
+  install -m 0755 /tmp/bin/micromamba "${MICROMAMBA_BIN}"
+  rm -rf /tmp/bin
+fi
+"${MICROMAMBA_BIN}" --version
+
+echo "==> Creating conda-forge environment for pyiron"
+if [ ! -x "${CUZR_ENV_PREFIX}/bin/python" ]; then
+  "${MICROMAMBA_BIN}" create -y -p "${CUZR_ENV_PREFIX}" -c conda-forge \
+    python=3.11 \
+    pip \
+    "numpy<2" \
+    scipy \
+    pandas \
+    matplotlib \
+    ase \
+    h5py \
+    mpi4py \
+    h5io \
+    sqlalchemy \
+    pysqa \
+    pyiron \
+    pyiron_base \
+    pyiron_atomistics \
+    pylammpsmpi \
+    structuretoolkit
+else
+  echo "Environment already exists at ${CUZR_ENV_PREFIX}; skipping create"
+fi
+
+PYTHON_BIN="${CUZR_ENV_PREFIX}/bin/python"
+PIP_BIN="${CUZR_ENV_PREFIX}/bin/pip"
 
 export PYTHON_BIN
 export PIP_BIN
-export PATH="/opt/cuzr-venv/bin:${PATH}"
+export PATH="${CUZR_ENV_PREFIX}/bin:${PATH}"
 
 echo "==> Python: ${PYTHON_BIN}"
 echo "==> Pip:    ${PIP_BIN}"
@@ -76,49 +109,18 @@ echo "==> Pip:    ${PIP_BIN}"
 echo "==> Preflight checks"
 if command -v nvidia-smi >/dev/null 2>&1; then
   nvidia-smi || true
-else
-  echo "WARNING: nvidia-smi not found. GPU runtime may not be attached yet."
 fi
-
 if command -v nvcc >/dev/null 2>&1; then
   nvcc --version || true
-else
-  echo "WARNING: nvcc not found on PATH. This image may not be a CUDA devel image."
 fi
 
-"${PYTHON_BIN}" - <<'PY'
-import sys
-print("Python executable:", sys.executable)
-try:
-    import torch
-    print("Torch:", torch.__version__)
-    print("Torch CUDA available:", torch.cuda.is_available())
-    print("Torch CUDA version:", torch.version.cuda)
-except Exception as exc:
-    print("WARNING: torch preflight failed:", exc)
-PY
+echo "==> Installing PyTorch CUDA 12.6 into the environment"
+"${PIP_BIN}" install --no-cache-dir \
+  torch==2.10.0 torchvision==0.25.0 torchaudio==2.10.0 \
+  --index-url https://download.pytorch.org/whl/cu126
 
-echo "==> Upgrading pip build tooling"
-"${PYTHON_BIN}" -m pip install --no-cache-dir --upgrade pip setuptools wheel
-
-echo "==> Installing Python stack"
-# Keep numpy<2 to stay friendly with pyiron-related packages and older scientific deps.
-"${PYTHON_BIN}" -m pip install --no-cache-dir \
-  "numpy<2" \
-  scipy \
-  pandas \
-  matplotlib \
-  ase \
-  h5py \
-  mpi4py \
-  h5io \
-  sqlalchemy \
-  pysqa \
-  pyiron \
-  pyiron_base \
-  pyiron_atomistics \
-  pylammpsmpi \
-  structuretoolkit \
+echo "==> Installing MACE-related Python packages"
+"${PIP_BIN}" install --no-cache-dir \
   configargparse \
   "e3nn==0.4.4" \
   lmdb \
@@ -136,13 +138,16 @@ echo "==> Installing Python stack"
 
 echo "==> Post-install Python sanity check"
 "${PYTHON_BIN}" - <<'PY'
+import sys
 import numpy
 import torch
 import ase
+print("Python:", sys.executable)
 print("NumPy:", numpy.__version__)
 print("Torch:", torch.__version__)
 print("ASE:", ase.__version__)
-print("Torch CUDA available:", torch.cuda.is_available())
+print("CUDA available:", torch.cuda.is_available())
+print("CUDA version:", torch.version.cuda)
 PY
 
 echo "==> Cloning LAMMPS"
@@ -196,13 +201,25 @@ cmake --build . --parallel "${BUILD_JOBS}"
 cmake --install .
 cmake --build . --target install-python --parallel 1
 
-echo "==> Writing environment helper"
-cat >/etc/profile.d/cuzr-lammps.sh <<EOF
-export PATH="${LAMMPS_INSTALL_DIR}/bin:/opt/cuzr-venv/bin:\$PATH"
+echo "==> Writing environment helper files"
+mkdir -p "$(dirname "${PYTHON_ENV_FILE}")"
+cat > "${PYTHON_ENV_FILE}" <<EOF
+export CUZR_ENV_PREFIX="${CUZR_ENV_PREFIX}"
+export PYTHON_BIN="${PYTHON_BIN}"
+export PIP_BIN="${PIP_BIN}"
+export PATH="${CUZR_ENV_PREFIX}/bin:${LAMMPS_INSTALL_DIR}/bin:\$PATH"
 export LD_LIBRARY_PATH="${LAMMPS_INSTALL_DIR}/lib:\$LD_LIBRARY_PATH"
 EOF
 
-export PATH="${LAMMPS_INSTALL_DIR}/bin:/opt/cuzr-venv/bin:${PATH}"
+cat >/etc/profile.d/cuzr-lammps.sh <<EOF
+export CUZR_ENV_PREFIX="${CUZR_ENV_PREFIX}"
+export PYTHON_BIN="${PYTHON_BIN}"
+export PIP_BIN="${PIP_BIN}"
+export PATH="${CUZR_ENV_PREFIX}/bin:${LAMMPS_INSTALL_DIR}/bin:\$PATH"
+export LD_LIBRARY_PATH="${LAMMPS_INSTALL_DIR}/lib:\$LD_LIBRARY_PATH"
+EOF
+
+export PATH="${CUZR_ENV_PREFIX}/bin:${LAMMPS_INSTALL_DIR}/bin:${PATH}"
 export LD_LIBRARY_PATH="${LAMMPS_INSTALL_DIR}/lib:${LD_LIBRARY_PATH:-}"
 
 echo "==> Final verification"
