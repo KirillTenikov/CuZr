@@ -14,6 +14,7 @@ set -euo pipefail
 #
 # Updated version:
 # - KIM disabled to avoid the libcurl/KIM linker failure
+# - LD_LIBRARY_PATH now includes /opt/cuzr-mamba/lib so lmp can find libpython3.11.so.1.0
 # - keeps ML-IAP / ML-SNAP / ML-PACE / PYTHON enabled for MACE + ACE workflows
 
 LAMMPS_SRC_DIR="${LAMMPS_SRC_DIR:-/opt/lammps}"
@@ -103,7 +104,7 @@ export CUZR_ENV_PREFIX="${CUZR_ENV_PREFIX}"
 export PYTHON_BIN="${PYTHON_BIN}"
 export PIP_BIN="${PIP_BIN}"
 export PATH="${CUZR_ENV_PREFIX}/bin:${LAMMPS_INSTALL_DIR}/bin:\$PATH"
-export LD_LIBRARY_PATH="${LAMMPS_INSTALL_DIR}/lib:\$LD_LIBRARY_PATH"
+export LD_LIBRARY_PATH="${CUZR_ENV_PREFIX}/lib:${LAMMPS_INSTALL_DIR}/lib:\$LD_LIBRARY_PATH"
 EOF
 
 cat > /etc/profile.d/cuzr-lammps.sh <<EOF
@@ -111,11 +112,11 @@ export CUZR_ENV_PREFIX="${CUZR_ENV_PREFIX}"
 export PYTHON_BIN="${PYTHON_BIN}"
 export PIP_BIN="${PIP_BIN}"
 export PATH="${CUZR_ENV_PREFIX}/bin:${LAMMPS_INSTALL_DIR}/bin:\$PATH"
-export LD_LIBRARY_PATH="${LAMMPS_INSTALL_DIR}/lib:\$LD_LIBRARY_PATH"
+export LD_LIBRARY_PATH="${CUZR_ENV_PREFIX}/lib:${LAMMPS_INSTALL_DIR}/lib:\$LD_LIBRARY_PATH"
 EOF
 
 export PATH="${CUZR_ENV_PREFIX}/bin:${LAMMPS_INSTALL_DIR}/bin:${PATH}"
-export LD_LIBRARY_PATH="${LAMMPS_INSTALL_DIR}/lib:${LD_LIBRARY_PATH:-}"
+export LD_LIBRARY_PATH="${CUZR_ENV_PREFIX}/lib:${LAMMPS_INSTALL_DIR}/lib:${LD_LIBRARY_PATH:-}"
 
 echo "==> Final verification"
 which lmp
