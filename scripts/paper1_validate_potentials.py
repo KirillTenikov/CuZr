@@ -79,6 +79,46 @@ DEFAULT_EAM_NAMES = {
     "2007_Mendelev-M-I_Cu-Zr_LAMMPS_ipr1": "2007--Mendelev-M-I--Cu-Zr--LAMMPS--ipr1",
 }
 
+
+# ----------------------------------------------------------------------
+# ASE / pyiron structure compatibility layer
+# ----------------------------------------------------------------------
+# We keep ASE Atoms for easy repeat()/copy() behavior during seed/crystal
+# generation, but pyiron-backed jobs expect structure methods like
+# get_species_symbols() and to_hdf(). Provide a minimal adapter so the
+# workflow can persist ASE structures into pyiron HDF without switching the
+# whole script back to pyiron Atoms.
+
+def _ase_get_species_symbols(self):
+    return list(dict.fromkeys(self.get_chemical_symbols()))
+
+def _ase_to_pyiron(self):
+    py = PyironAtoms(
+        symbols=self.get_chemical_symbols(),
+        positions=self.get_positions(),
+        cell=self.cell.array,
+        pbc=self.pbc,
+    )
+    # copy over extra arrays where possible, but avoid ASE core arrays
+    for key, val in getattr(self, "arrays", {}).items():
+        if key in {"numbers", "positions"}:
+            continue
+        try:
+            py.arrays[key] = val.copy()
+        except Exception:
+            pass
+    return py
+
+def _ase_to_hdf(self, hdf, group_name="structure"):
+    return _ase_to_pyiron(self).to_hdf(hdf, group_name=group_name)
+
+if not hasattr(Atoms, "get_species_symbols"):
+    Atoms.get_species_symbols = _ase_get_species_symbols
+
+if not hasattr(Atoms, "to_hdf"):
+    Atoms.to_hdf = _ase_to_hdf
+
+
 # Helper module handle used by the run_* helpers below.
 cz = None
 
