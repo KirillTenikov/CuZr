@@ -46,6 +46,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from ase.geometry.analysis import Analysis
+from ase.io import write, read
 from pyiron_atomistics import Project
 from ase import Atoms
 
@@ -464,6 +465,24 @@ def run_minimize(pr: Project, job_name: str, structure: Atoms, pot_spec: Dict[st
     job = cz.load_or_run(pr, job)
     return job
 
+def cache_minimized_glass_structure(cache_dir: Path, pot_id: str, composition_id: str, structure: Atoms) -> Path | None:
+    try:
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        out = cache_dir / f"glass_min_{pot_id}_{composition_id}.extxyz"
+        write(out, structure, format="extxyz")
+        return out
+    except Exception:
+        return None
+
+def load_cached_glass_structure(cache_dir: Path, pot_id: str, composition_id: str) -> Atoms | None:
+    p = cache_dir / f"glass_min_{pot_id}_{composition_id}.extxyz"
+    if not p.exists():
+        return None
+    try:
+        return read(p.as_posix(), format="extxyz")
+    except Exception:
+        return None
+
 def run_eos_scan(
     pr: Project,
     structure: Atoms,
@@ -669,7 +688,8 @@ def ncl_validation_pipeline(
     thermo: int,
     dump_every: int,
     neigh_every: int,
-) -> Dict[str, Any]:
+    cache_dir: Path | None = None,
+) -> tuple[Dict[str, Any], Atoms]:
     comp = composition_from_structure(structure0)
     out: Dict[str, Any] = {
         "pot_id": pot_spec["id"],
@@ -744,7 +764,8 @@ def ncl_validation_pipeline(
     out["E_nve_per_atom_eV"] = get_last_energy(jnve) / len(structure0)
     out["T_nve_last_K"] = get_last_temp(jnve)
 
-    compressed = isotropic_scale(jmin.get_structure(iteration_step=-1), 0.97)
+    s_min = jmin.get_structure(iteration_step=-1)
+    compressed = isotropic_scale(s_min, 0.97)
     jcomp = run_static_resume(
         pr,
         jname("glass_compressed", pot_spec, mode_dev, composition_id=composition_id),
@@ -754,7 +775,9 @@ def ncl_validation_pipeline(
     )
     out["E_compressed_per_atom_eV"] = get_last_energy(jcomp) / len(compressed)
     out["job_glass_min"] = jname("glass_min", pot_spec, mode_dev, composition_id=composition_id)
-    return out
+    if cache_dir is not None:
+        cache_minimized_glass_structure(cache_dir, pot_spec["id"], composition_id, s_min)
+    return out, s_min
 
 def run_mddms_precheck(
     pr,
@@ -938,6 +961,8 @@ def main() -> int:
         cid: make_glass_seed(cid, rep=glass_rep, rng_seed=args.seed + i)
         for i, cid in enumerate(glass_composition_ids)
     }
+    glass_cache_dir = results_dir / "glass_min_cache"
+    glass_min_cache: Dict[Tuple[str, str], Atoms] = {}
 
     smoke_rows: List[Dict[str, Any]] = []
     if not args.skip_smoke:
@@ -1018,24 +1043,25 @@ def main() -> int:
             for composition_id in glass_composition_ids:
                 print(f"RUNNING GLASS PIPELINE: {p['id']} / {composition_id}", flush=True)
                 try:
-                    ncl_rows.append(
-                        ncl_validation_pipeline(
-                            pr=pr,
-                            structure0=glass_seeds[composition_id],
-                            composition_id=composition_id,
-                            pot_spec=p,
-                            mode_dev=mode_dev,
-                            cores=runtime["cores"],
-                            T_melt=runtime["T_melt"],
-                            steps_melt=runtime["steps_melt"],
-                            quench_ts=runtime["quench_ts"],
-                            steps_each=runtime["steps_each"],
-                            nve_steps=runtime["nve_steps"],
-                            thermo=runtime["thermo"],
-                            dump_every=runtime["dump_every"],
-                            neigh_every=runtime["neigh_every"],
-                        )
+                    row, s_min = ncl_validation_pipeline(
+                        pr=pr,
+                        structure0=glass_seeds[composition_id],
+                        composition_id=composition_id,
+                        pot_spec=p,
+                        mode_dev=mode_dev,
+                        cores=runtime["cores"],
+                        T_melt=runtime["T_melt"],
+                        steps_melt=runtime["steps_melt"],
+                        quench_ts=runtime["quench_ts"],
+                        steps_each=runtime["steps_each"],
+                        nve_steps=runtime["nve_steps"],
+                        thermo=runtime["thermo"],
+                        dump_every=runtime["dump_every"],
+                        neigh_every=runtime["neigh_every"],
+                        cache_dir=glass_cache_dir,
                     )
+                    ncl_rows.append(row)
+                    glass_min_cache[(p["id"], composition_id)] = s_min
                 except Exception as exc:
                     ncl_rows.append(error_row("glass_pipeline", p["id"], composition_id=composition_id, exc=exc))
                 save_progress(ncl_rows, results_dir / "ncl_validation.csv")
@@ -1053,8 +1079,11 @@ def main() -> int:
         for p in pots_to_run:
             print(f"MD-DMS PRECHECK: {p['id']} / {precheck_cid}", flush=True)
             try:
-                jmin = pr.load(jname("glass_min", p, mode_dev, composition_id=precheck_cid))
-                s_pre = safe_last_structure(jmin)
+                s_pre = glass_min_cache.get((p["id"], precheck_cid))
+                if s_pre is None:
+                    s_pre = load_cached_glass_structure(glass_cache_dir, p["id"], precheck_cid)
+                if s_pre is None:
+                    raise RuntimeError(f"No minimized glass structure cached for {p['id']} / {precheck_cid}")
                 mddms_rows.append(
                     run_mddms_precheck(
                         pr=pr,
@@ -1150,8 +1179,11 @@ def main() -> int:
             pid = p["id"]
             for composition_id in glass_composition_ids:
                 try:
-                    jmin = pr.load(jname("glass_min", p, mode_dev, composition_id=composition_id))
-                    s = safe_last_structure(jmin)
+                    s = glass_min_cache.get((pid, composition_id))
+                    if s is None:
+                        s = load_cached_glass_structure(glass_cache_dir, pid, composition_id)
+                    if s is None:
+                        raise RuntimeError(f"No minimized glass structure cached for {pid} / {composition_id}")
                     ana = Analysis(s)
                     r, g = ana.get_rdf(rmax=8.0, nbins=200)
                     rdf_store[(pid, composition_id)] = {"r": np.asarray(r), "g_r": np.asarray(g)}
