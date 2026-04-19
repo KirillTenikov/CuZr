@@ -1,55 +1,61 @@
 #!/usr/bin/env python3
-"""Production-ready Paper 1 validation driver for Cu-Zr potentials.
+"""
+Run Paper 1 validation workflow for multiple Cu-Zr potentials.
 
-This wrapper keeps the scientific logic of the existing validation script, but
-makes it safer for a long multi-model production campaign:
-- registers the real ACE baselines (ACE_514 and ACE_1352) instead of placeholders
-- supports explicit model-file overrides from the command line
-- uses resume-friendly job creation where practical
-- lets the user skip individual validation blocks
-- adds explicit runtime overrides for long glass/MD runs
-- keeps going when one potential/block fails, recording the error instead of
-  killing the whole campaign
+Single-file Paper 1 validation driver for Cu-Zr potentials.
+This version merges the earlier base workflow and the production wrapper into one maintainable script. It compares crystalline,
+amorphous, and short-time dynamical readiness metrics across Cu-Zr MLIPs and EAM
+baselines. It also includes a small MD-DMS-oriented precheck so that Paper 1
+outputs can serve as a clean bridge toward the oscillatory-shear workflow used
+in Paper 2.
 
-Place this file next to scripts/paper1_validate_potentials.py inside the repo.
+Main blocks:
+- smoke tests
+- EOS for FCC Cu / HCP Zr / B2 CuZr
+- local bulk modulus estimate
+- vacancy formation energies for FCC Cu / HCP Zr
+- melt -> quench -> minimize -> NVE for each selected glass composition
+- composition-aware RDF and approximate S(q)
+- compact Paper 1 summary table
+- short MD-DMS precheck:
+    * sinusoidal xy shear on a minimized glass
+    * global shear-stress / strain signal export
+    * per-atom stress export for downstream Fourier / phase analysis
+
+This single-file version avoids the old wrapper/base self-import problem while keeping the same helper-module API
+as the existing Cu-Zr pyiron + LAMMPS workflow.
 """
 from __future__ import annotations
 
 import argparse
-import importlib.util
+import importlib
 import json
 import os
 import sys
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Sequence, Tuple
 
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+for extra in [PROJECT_ROOT, PROJECT_ROOT / "src"]:
+    if str(extra) not in sys.path and extra.exists():
+        sys.path.insert(0, str(extra))
+
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from ase.geometry.analysis import Analysis
+from pyiron_atomistics import Project
+from pyiron_atomistics.atomistics.structure.atoms import Atoms
 
+from src.path_utils import resolve_path
 
-THIS_FILE = Path(__file__).resolve()
-BASE_SCRIPT = THIS_FILE.with_name("paper1_validate_potentials.py")
-if not BASE_SCRIPT.exists():
-    raise FileNotFoundError(
-        f"Expected base validation script next to this file: {BASE_SCRIPT}"
-    )
-
-
-def load_base_module(path: Path):
-    spec = importlib.util.spec_from_file_location("paper1_validate_potentials_base", path)
-    if spec is None or spec.loader is None:
-        raise ImportError(f"Could not load base module from {path}")
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
-    return module
-
-
-base = load_base_module(BASE_SCRIPT)
-PROJECT_ROOT = base.PROJECT_ROOT
-resolve_path = base.resolve_path
-GLASS_COMPOSITIONS = base.GLASS_COMPOSITIONS
-
+GLASS_COMPOSITIONS: Dict[str, Tuple[float, float]] = {
+    "Cu64Zr36": (0.64, 0.36),
+    "Cu50Zr50": (0.50, 0.50),
+    "Cu36Zr64": (0.36, 0.64),
+}
 
 DEFAULT_MACE_FILES = {
     "MACE_A": "CuZr_MACE_A_compiled.model-lammps.pt",
@@ -57,11 +63,21 @@ DEFAULT_MACE_FILES = {
     "MACE_C": "CuZr_MACE_C_compiled.model-lammps.pt",
     "MACE_D": "CuZr_MACE_D_compiled.model-lammps.pt",
 }
+
 DEFAULT_EAM_NAMES = {
     "EAM_Mendelev_2019_CuZr": "EAM_Mendelev_2019_CuZr__MO_945018740343_000",
     "2007_Mendelev-M-I_Cu-Zr_LAMMPS_ipr1": "2007--Mendelev-M-I--Cu-Zr--LAMMPS--ipr1",
 }
 
+def import_helper(module_name: str):
+    try:
+        return importlib.import_module(module_name)
+    except ModuleNotFoundError:
+        fallback_paths = [PROJECT_ROOT / "src"]
+        missing_msg = ", ".join(str(p) for p in fallback_paths)
+        raise ModuleNotFoundError(
+            f"Could not import helper module '{module_name}'. Looked via sys.path and expected it under: {missing_msg}"
+        )
 
 def maybe_resolve_model_path(raw: str | None) -> str | None:
     if raw is None:
@@ -77,12 +93,10 @@ def maybe_resolve_model_path(raw: str | None) -> str | None:
         return str(repo_rel)
     return raw
 
-
 class CommaListAction(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):
         parsed = [x.strip() for x in str(values).split(",") if x.strip()]
         setattr(namespace, self.dest, parsed)
-
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
@@ -164,6 +178,44 @@ def parse_args() -> argparse.Namespace:
 
     return parser.parse_args()
 
+def configure_threads(mode_dev: bool) -> None:
+    if mode_dev:
+        os.environ.setdefault("OMP_NUM_THREADS", "6")
+        os.environ.setdefault("MKL_NUM_THREADS", "1")
+        os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
+        os.environ.setdefault("VECLIB_MAXIMUM_THREADS", "1")
+
+def register_potentials(cz, args: argparse.Namespace) -> List[Dict[str, Any]]:
+    specs: List[Dict[str, Any]] = [
+        cz.make_mace_spec("MACE_A", maybe_resolve_model_path(args.mace_a_file) or DEFAULT_MACE_FILES["MACE_A"]),
+        cz.make_mace_spec("MACE_B", maybe_resolve_model_path(args.mace_b_file) or DEFAULT_MACE_FILES["MACE_B"]),
+        cz.make_mace_spec("MACE_C", maybe_resolve_model_path(args.mace_c_file) or DEFAULT_MACE_FILES["MACE_C"]),
+        cz.make_mace_spec("MACE_D", maybe_resolve_model_path(args.mace_d_file) or DEFAULT_MACE_FILES["MACE_D"]),
+    ]
+
+    if not args.skip_eam:
+        for pid, name in DEFAULT_EAM_NAMES.items():
+            specs.append(cz.make_pyiron_spec(pid, name))
+
+    ace_514 = maybe_resolve_model_path(args.ace_514_file)
+    ace_1352 = maybe_resolve_model_path(args.ace_1352_file)
+    if ace_514:
+        specs.append(cz.make_ace_spec("ACE_514", ace_514))
+    if ace_1352:
+        specs.append(cz.make_ace_spec("ACE_1352", ace_1352))
+
+    cz.register_potentials(specs)
+    return list(cz.POTENTIALS)
+
+def select_potentials(all_pots: Sequence[Dict[str, Any]], pots_arg: str) -> List[Dict[str, Any]]:
+    if pots_arg.strip().lower() == "all":
+        return list(all_pots)
+    wanted = {x.strip() for x in pots_arg.split(",") if x.strip()}
+    selected = [p for p in all_pots if p["id"] in wanted]
+    missing = sorted(wanted - {p["id"] for p in selected})
+    if missing:
+        raise ValueError(f"Unknown potentials requested: {missing}")
+    return selected
 
 def parse_glass_composition_ids(raw: str) -> List[str]:
     ids = [x.strip() for x in raw.split(",") if x.strip()]
@@ -174,13 +226,11 @@ def parse_glass_composition_ids(raw: str) -> List[str]:
         raise ValueError(f"Unknown glass composition IDs: {unknown}")
     return ids
 
-
 def parse_rep(raw: str) -> Tuple[int, int, int]:
     vals = tuple(int(x.strip()) for x in raw.split(","))
     if len(vals) != 3:
-        raise ValueError("--glass-rep must have exactly three integers, e.g. 10,10,25")
+        raise ValueError("--glass-rep must have exactly three integers, e.g. 5,5,5")
     return vals
-
 
 def parse_quench_ts(raw: str | None, mode_dev: bool) -> Tuple[int, ...]:
     if raw is None or not str(raw).strip():
@@ -189,14 +239,8 @@ def parse_quench_ts(raw: str | None, mode_dev: bool) -> Tuple[int, ...]:
     if not vals:
         raise ValueError("--quench-ts produced an empty temperature list")
     return vals
-
-
-ndefault = object()
-
 def defaulted(value: Any, default: Any) -> Any:
     return default if value is None else value
-
-
 def configure_runtime(mode_dev: bool, args: argparse.Namespace) -> Dict[str, Any]:
     cores = args.cores if args.cores is not None else (1 if mode_dev else 4)
     if mode_dev:
@@ -231,49 +275,124 @@ def configure_runtime(mode_dev: bool, args: argparse.Namespace) -> Dict[str, Any
         "neigh_every": int(args.neigh_every),
     }
 
+def make_fcc_cu(a: float = 3.615, rep=(4, 4, 4)) -> Atoms:
+    basis = Atoms(
+        symbols=["Cu"] * 4,
+        positions=[[0.0, 0.0, 0.0], [0.0, 0.5 * a, 0.5 * a], [0.5 * a, 0.0, 0.5 * a], [0.5 * a, 0.5 * a, 0.0]],
+        cell=[a, a, a],
+        pbc=True,
+    )
+    return basis.repeat(rep)
 
-def register_potentials(cz, args: argparse.Namespace) -> List[Dict[str, Any]]:
-    specs: List[Dict[str, Any]] = [
-        cz.make_mace_spec("MACE_A", maybe_resolve_model_path(args.mace_a_file) or DEFAULT_MACE_FILES["MACE_A"]),
-        cz.make_mace_spec("MACE_B", maybe_resolve_model_path(args.mace_b_file) or DEFAULT_MACE_FILES["MACE_B"]),
-        cz.make_mace_spec("MACE_C", maybe_resolve_model_path(args.mace_c_file) or DEFAULT_MACE_FILES["MACE_C"]),
-        cz.make_mace_spec("MACE_D", maybe_resolve_model_path(args.mace_d_file) or DEFAULT_MACE_FILES["MACE_D"]),
-    ]
+def make_hcp_zr(a: float = 3.23, c_over_a: float = 1.593, rep=(4, 4, 3)) -> Atoms:
+    c = c_over_a * a
+    cell = np.array([[a, 0.0, 0.0], [0.5 * a, np.sqrt(3) / 2 * a, 0.0], [0.0, 0.0, c]])
+    basis = Atoms(symbols=["Zr", "Zr"], scaled_positions=[[0.0, 0.0, 0.0], [2 / 3, 1 / 3, 1 / 2]], cell=cell, pbc=True)
+    return basis.repeat(rep)
 
-    if not args.skip_eam:
-        for pid, name in DEFAULT_EAM_NAMES.items():
-            specs.append(cz.make_pyiron_spec(pid, name))
+def make_b2_cuzr(a: float = 3.2, rep=(6, 6, 6)) -> Atoms:
+    structure = Atoms(symbols=["Cu", "Zr"], positions=[[0.0, 0.0, 0.0], [0.5 * a, 0.5 * a, 0.5 * a]], cell=[a, a, a], pbc=True)
+    return structure.repeat(rep)
 
-    ace_514 = maybe_resolve_model_path(args.ace_514_file)
-    ace_1352 = maybe_resolve_model_path(args.ace_1352_file)
-    if ace_514:
-        specs.append(cz.make_ace_spec("ACE_514", ace_514))
-    if ace_1352:
-        specs.append(cz.make_ace_spec("ACE_1352", ace_1352))
+def make_glass_seed(composition_id: str, a: float = 3.2, rep=(5, 5, 5), rng_seed: int = 42) -> Atoms:
+    if composition_id not in GLASS_COMPOSITIONS:
+        raise ValueError(f"Unknown composition_id: {composition_id}")
 
-    cz.register_potentials(specs)
-    return list(cz.POTENTIALS)
+    cu_frac, zr_frac = GLASS_COMPOSITIONS[composition_id]
+    total_frac = cu_frac + zr_frac
+    if abs(total_frac - 1.0) > 1e-9:
+        raise ValueError(f"Fractions for {composition_id} do not sum to 1.0")
 
+    structure = make_b2_cuzr(a=a, rep=rep)
+    n_atoms = len(structure)
+    n_zr = int(round(zr_frac * n_atoms))
+    n_zr = max(0, min(n_atoms, n_zr))
 
-def select_potentials(all_pots: Sequence[Dict[str, Any]], pots_arg: str) -> List[Dict[str, Any]]:
-    if pots_arg.strip().lower() == "all":
-        return list(all_pots)
-    wanted = {x.strip() for x in pots_arg.split(",") if x.strip()}
-    selected = [p for p in all_pots if p["id"] in wanted]
-    missing = sorted(wanted - {p["id"] for p in selected})
-    if missing:
-        raise ValueError(f"Unknown potentials requested: {missing}")
-    return selected
+    rng = np.random.default_rng(rng_seed)
+    zr_indices = set(rng.choice(n_atoms, size=n_zr, replace=False).tolist())
+    new_symbols = ["Zr" if i in zr_indices else "Cu" for i in range(n_atoms)]
+    structure.set_chemical_symbols(new_symbols)
+    return structure
 
+def composition_from_structure(structure: Atoms) -> Dict[str, Any]:
+    symbols = list(structure.get_chemical_symbols())
+    n_total = len(symbols)
+    n_cu = sum(1 for s in symbols if s == "Cu")
+    n_zr = sum(1 for s in symbols if s == "Zr")
+    return {
+        "n_atoms": n_total,
+        "n_cu": n_cu,
+        "n_zr": n_zr,
+        "x_cu": n_cu / n_total if n_total else np.nan,
+        "x_zr": n_zr / n_total if n_total else np.nan,
+    }
+
+def jname(prefix: str, pot_spec: Dict[str, Any], mode_dev: bool, composition_id: str | None = None) -> str:
+    run_tag = "dev" if mode_dev else "prod"
+    comp = f"_{composition_id}" if composition_id else ""
+    return f"{run_tag}_{prefix}{comp}_{pot_spec['id']}"
+
+def isotropic_scale(structure: Atoms, scale: float) -> Atoms:
+    s = structure.copy()
+    s.set_cell(np.array(s.cell) * scale, scale_atoms=True)
+    return s
+
+def get_last_energy(job) -> float:
+    try:
+        return float(job.output.energy_pot[-1])
+    except Exception:
+        try:
+            return float(job.output.energy_tot[-1])
+        except Exception:
+            return np.nan
+
+def get_last_temp(job) -> float:
+    try:
+        return float(job.output.temperature[-1])
+    except Exception:
+        return np.nan
+
+def get_last_press(job) -> float:
+    for attr in ["pressures", "pressure", "press"]:
+        try:
+            arr = getattr(job.output, attr)
+            return float(arr[-1])
+        except Exception:
+            pass
+    return np.nan
+
+def static_summary(job, label: str, pot_id: str, structure_name: str, scale: float | None = None) -> Dict[str, Any]:
+    e_last = get_last_energy(job)
+    return {
+        "label": label,
+        "pot_id": pot_id,
+        "structure": structure_name,
+        "scale": scale,
+        "n_atoms": len(job.structure),
+        "energy_last_eV": e_last,
+        "energy_per_atom_eV": e_last / len(job.structure),
+    }
+
+def md_summary(job, label: str, pot_id: str, structure_name: str) -> Dict[str, Any]:
+    e_last = get_last_energy(job)
+    return {
+        "label": label,
+        "pot_id": pot_id,
+        "structure": structure_name,
+        "n_atoms": len(job.structure),
+        "energy_last_eV": e_last,
+        "energy_per_atom_eV": e_last / len(job.structure),
+        "temp_last_K": get_last_temp(job),
+        "press_last": get_last_press(job),
+    }
 
 def run_static_resume(pr, job_name: str, structure, pot_spec: Dict[str, Any], cores: int):
-    job = base.cz.make_lammps_job(pr, job_name, structure, pot_spec, delete_existing=False, cores=cores)
+    job = cz.make_lammps_job(pr, job_name, structure, pot_spec, delete_existing=False, cores=cores)
     job.calc_static()
-    job = base.cz.load_or_run(pr, job)
+    job = cz.load_or_run(pr, job)
     return job
 
-
-def md_from_last_resume(
+def md_from_last(
     pr,
     job_name: str,
     prev_job,
@@ -287,7 +406,7 @@ def md_from_last_resume(
     timestep_fs: float = 1.0,
 ):
     struct = prev_job.get_structure(iteration_step=-1)
-    return base.cz.run_md(
+    return cz.run_md(
         pr=pr,
         job_name=job_name,
         structure=struct,
@@ -302,8 +421,223 @@ def md_from_last_resume(
         neigh_every=neigh_every,
     )
 
+def run_nve(
+    pr: Project,
+    job_name: str,
+    structure: Atoms,
+    pot_spec: Dict[str, Any],
+    steps: int,
+    cores: int,
+    thermo: int,
+    neigh_every: int,
+    timestep_fs: float = 1.0,
+):
+    job = cz.make_lammps_job(pr, job_name, structure, pot_spec, delete_existing=False, cores=cores)
+    job.calc_md(temperature=None, pressure=None, n_ionic_steps=steps, time_step=timestep_fs)
+    job.input.control["fix___ensemble"] = "all nve"
+    job.input.control["variable___thermotime"] = f"equal {int(thermo)}"
+    job.input.control["neighbor"] = "2.0 bin"
+    job.input.control["neigh_modify"] = f"every {int(neigh_every)} delay 0 check yes"
+    job = cz.load_or_run(pr, job)
+    return job
 
-def ncl_validation_pipeline_resume(
+def run_minimize(pr: Project, job_name: str, structure: Atoms, pot_spec: Dict[str, Any], cores: int):
+    job = cz.make_lammps_job(pr, job_name, structure, pot_spec, delete_existing=False, cores=cores)
+    job.calc_minimize(ionic_energy_tolerance=0.0, ionic_force_tolerance=1e-4, max_iter=200, n_print=100)
+    job = cz.load_or_run(pr, job)
+    return job
+
+def run_eos_scan(
+    pr: Project,
+    structure: Atoms,
+    structure_name: str,
+    pot_spec: Dict[str, Any],
+    scales: Iterable[float],
+    mode_dev: bool,
+    cores: int,
+) -> pd.DataFrame:
+    rows = []
+    for i, s in enumerate(scales):
+        struct_s = isotropic_scale(structure, float(s))
+        job = cz.run_static(
+            pr=pr,
+            job_name=jname(f"eos_{structure_name}_{i:02d}", pot_spec, mode_dev),
+            structure=struct_s,
+            pot_spec=pot_spec,
+            cores=cores,
+            delete_existing=False,
+        )
+        rows.append(static_summary(job, "eos", pot_spec["id"], structure_name, scale=float(s)))
+    return pd.DataFrame(rows)
+
+EV_PER_A3_TO_GPA = 160.21766208
+
+def get_structure_volume(structure: Atoms) -> float:
+    return float(abs(np.linalg.det(np.array(structure.cell))))
+
+def local_bulk_modulus_from_eos(structure: Atoms, eos_slice: pd.DataFrame) -> float:
+    df = eos_slice.sort_values("scale").copy()
+    if len(df) < 3:
+        return np.nan
+    V0 = get_structure_volume(structure)
+    df["volume_A3"] = V0 * (df["scale"].astype(float) ** 3)
+    x = df["volume_A3"].to_numpy(dtype=float)
+    y = df["energy_last_eV"].to_numpy(dtype=float)
+    i0 = int(np.argmin(y))
+    lo = max(0, i0 - 1)
+    hi = min(len(df), i0 + 2)
+    if hi - lo < 3:
+        lo = max(0, hi - 3)
+        hi = min(len(df), lo + 3)
+    xfit = x[lo:hi]
+    yfit = y[lo:hi]
+    if len(xfit) < 3:
+        return np.nan
+    a, b, _ = np.polyfit(xfit, yfit, 2)
+    if a <= 0:
+        return np.nan
+    vmin = -b / (2 * a)
+    b0_eva3 = vmin * (2 * a)
+    return b0_eva3 * EV_PER_A3_TO_GPA
+
+def make_vacancy_structure(structure: Atoms, atom_index: int = 0) -> Atoms:
+    s = structure.copy()
+    del s[atom_index]
+    return s
+
+def vacancy_formation_energy(
+    pr: Project,
+    base_structure: Atoms,
+    structure_name: str,
+    pot_spec: Dict[str, Any],
+    mode_dev: bool,
+    cores: int,
+    repeat=(3, 3, 3),
+    atom_index: int = 0,
+) -> Dict[str, Any]:
+    perfect = base_structure.repeat(repeat)
+    jperf = run_minimize(pr, jname(f"vac_perfect_{structure_name}", pot_spec, mode_dev), perfect, pot_spec, cores=cores)
+    e_perfect = get_last_energy(jperf)
+    n_perfect = len(jperf.structure)
+    defect = make_vacancy_structure(jperf.get_structure(iteration_step=-1), atom_index=atom_index)
+    jdef = run_minimize(pr, jname(f"vac_defect_{structure_name}", pot_spec, mode_dev), defect, pot_spec, cores=cores)
+    e_defect = get_last_energy(jdef)
+    e_form = e_defect - ((n_perfect - 1) / n_perfect) * e_perfect
+    return {
+        "pot_id": pot_spec["id"],
+        "structure": structure_name,
+        "repeat": "x".join(map(str, repeat)),
+        "n_perfect": n_perfect,
+        "e_vac_form_eV": e_form,
+    }
+
+def safe_last_structure(job):
+    try:
+        return job.get_structure(iteration_step=-1)
+    except Exception:
+        return job.get_structure()
+
+def structure_factor_from_rdf(r, g_r, rho_number, q_values):
+    r = np.asarray(r, dtype=float)
+    g_r = np.asarray(g_r, dtype=float)
+    q_values = np.asarray(q_values, dtype=float)
+    h = g_r - 1.0
+    s_q = []
+    for q in q_values:
+        if q == 0:
+            s_q.append(np.nan)
+            continue
+        integrand = r * h * np.sin(q * r)
+        integral = np.trapz(integrand, r)
+        s_q.append(1.0 + 4.0 * np.pi * rho_number * integral / q)
+    return np.asarray(s_q)
+
+def save_dataframe(df: pd.DataFrame, path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    df.to_csv(path, index=False)
+    print(f"[saved] {path}", flush=True)
+
+def save_json(data: Dict[str, Any], path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
+    print(f"[saved] {path}", flush=True)
+
+def plot_eos(eos_df: pd.DataFrame, out_dir: Path) -> None:
+    for structure_name in ["FCC_Cu", "HCP_Zr", "B2_CuZr"]:
+        sub = eos_df[eos_df["structure"] == structure_name]
+        plt.figure(figsize=(6, 4))
+        for pid, g in sub.groupby("pot_id"):
+            plt.plot(g["scale"], g["energy_per_atom_eV"], marker="o", label=pid)
+        plt.xlabel("isotropic scale")
+        plt.ylabel("energy / atom (eV)")
+        plt.title(structure_name)
+        plt.legend()
+        plt.tight_layout()
+        path = out_dir / f"eos_{structure_name}.png"
+        plt.savefig(path, dpi=150)
+        plt.close()
+        print(f"[saved] {path}", flush=True)
+
+def plot_rdf(rdf_store: Dict[Tuple[str, str], Dict[str, np.ndarray]], out_dir: Path) -> None:
+    if not rdf_store:
+        return
+    for composition_id in sorted({key[1] for key in rdf_store}):
+        plt.figure(figsize=(6, 4))
+        for (pid, cid), vals in rdf_store.items():
+            if cid != composition_id:
+                continue
+            plt.plot(vals["r"], vals["g_r"], label=pid)
+        plt.xlabel("r (Å)")
+        plt.ylabel("g(r)")
+        plt.title(f"RDF of minimized glass: {composition_id}")
+        plt.legend()
+        plt.tight_layout()
+        path = out_dir / f"rdf_glass_{composition_id}.png"
+        plt.savefig(path, dpi=150)
+        plt.close()
+        print(f"[saved] {path}", flush=True)
+
+def plot_sq(sq_store: Dict[Tuple[str, str], Dict[str, np.ndarray]], out_dir: Path) -> None:
+    if not sq_store:
+        return
+    for composition_id in sorted({key[1] for key in sq_store}):
+        plt.figure(figsize=(6, 4))
+        for (pid, cid), vals in sq_store.items():
+            if cid != composition_id:
+                continue
+            plt.plot(vals["q"], vals["s_q"], label=pid)
+        plt.xlabel("q (1/Å)")
+        plt.ylabel("S(q) proxy")
+        plt.title(f"Approximate structure factor: {composition_id}")
+        plt.legend()
+        plt.tight_layout()
+        path = out_dir / f"sq_proxy_{composition_id}.png"
+        plt.savefig(path, dpi=150)
+        plt.close()
+        print(f"[saved] {path}", flush=True)
+
+def get_nve_drift_for_potential_and_composition(pot_id: str, composition_id: str, ncl_df: pd.DataFrame) -> float:
+    sub = ncl_df[(ncl_df["pot_id"] == pot_id) & (ncl_df["composition_id"] == composition_id)]
+    if len(sub) == 0:
+        return np.nan
+    try:
+        return float(sub["E_nve_per_atom_eV"].iloc[0] - sub["E_glass_min_per_atom_eV"].iloc[0])
+    except Exception:
+        return np.nan
+
+def glass_formation_energy_from_refs(
+    glass_energy_per_atom_eV: float,
+    x_cu: float,
+    x_zr: float,
+    ref_cu_energy_per_atom_eV: float,
+    ref_zr_energy_per_atom_eV: float,
+) -> float:
+    if np.isnan(glass_energy_per_atom_eV) or np.isnan(ref_cu_energy_per_atom_eV) or np.isnan(ref_zr_energy_per_atom_eV):
+        return np.nan
+    return glass_energy_per_atom_eV - (x_cu * ref_cu_energy_per_atom_eV + x_zr * ref_zr_energy_per_atom_eV)
+
+def ncl_validation_pipeline(
     pr,
     structure0,
     composition_id: str,
@@ -319,7 +653,7 @@ def ncl_validation_pipeline_resume(
     dump_every: int,
     neigh_every: int,
 ) -> Dict[str, Any]:
-    comp = base.composition_from_structure(structure0)
+    comp = composition_from_structure(structure0)
     out: Dict[str, Any] = {
         "pot_id": pot_spec["id"],
         "composition_id": composition_id,
@@ -329,16 +663,16 @@ def ncl_validation_pipeline_resume(
 
     j0 = run_static_resume(
         pr,
-        base.jname("static_glass_seed", pot_spec, mode_dev, composition_id=composition_id),
+        jname("static_glass_seed", pot_spec, mode_dev, composition_id=composition_id),
         structure0,
         pot_spec,
         cores=cores,
     )
-    out["E_static_per_atom_eV"] = base.get_last_energy(j0) / len(structure0)
+    out["E_static_per_atom_eV"] = get_last_energy(j0) / len(structure0)
 
-    jm = base.cz.run_md(
+    jm = cz.run_md(
         pr=pr,
-        job_name=base.jname("melt", pot_spec, mode_dev, composition_id=composition_id),
+        job_name=jname("melt", pot_spec, mode_dev, composition_id=composition_id),
         structure=structure0,
         pot_spec=pot_spec,
         T=T_melt,
@@ -350,14 +684,14 @@ def ncl_validation_pipeline_resume(
         dump_every=dump_every,
         neigh_every=neigh_every,
     )
-    out["E_melt_per_atom_eV"] = base.get_last_energy(jm) / len(structure0)
-    out["T_melt_last_K"] = base.get_last_temp(jm)
+    out["E_melt_per_atom_eV"] = get_last_energy(jm) / len(structure0)
+    out["T_melt_last_K"] = get_last_temp(jm)
 
     prev = jm
     for T in quench_ts:
         jq = md_from_last_resume(
             pr=pr,
-            job_name=base.jname(f"quench_{T}K", pot_spec, mode_dev, composition_id=composition_id),
+            job_name=jname(f"quench_{T}K", pot_spec, mode_dev, composition_id=composition_id),
             prev_job=prev,
             pot_spec=pot_spec,
             T=T,
@@ -367,22 +701,22 @@ def ncl_validation_pipeline_resume(
             dump_every=dump_every,
             neigh_every=neigh_every,
         )
-        out[f"E_{T}K_per_atom_eV"] = base.get_last_energy(jq) / len(structure0)
-        out[f"T_{T}K_last_K"] = base.get_last_temp(jq)
+        out[f"E_{T}K_per_atom_eV"] = get_last_energy(jq) / len(structure0)
+        out[f"T_{T}K_last_K"] = get_last_temp(jq)
         prev = jq
 
-    jmin = base.run_minimize(
+    jmin = run_minimize(
         pr,
-        base.jname("glass_min", pot_spec, mode_dev, composition_id=composition_id),
+        jname("glass_min", pot_spec, mode_dev, composition_id=composition_id),
         prev.get_structure(iteration_step=-1),
         pot_spec,
         cores=cores,
     )
-    out["E_glass_min_per_atom_eV"] = base.get_last_energy(jmin) / len(structure0)
+    out["E_glass_min_per_atom_eV"] = get_last_energy(jmin) / len(structure0)
 
-    jnve = base.run_nve(
+    jnve = run_nve(
         pr,
-        base.jname("glass_nve", pot_spec, mode_dev, composition_id=composition_id),
+        jname("glass_nve", pot_spec, mode_dev, composition_id=composition_id),
         jmin.get_structure(iteration_step=-1),
         pot_spec,
         steps=nve_steps,
@@ -390,23 +724,22 @@ def ncl_validation_pipeline_resume(
         thermo=thermo,
         neigh_every=neigh_every,
     )
-    out["E_nve_per_atom_eV"] = base.get_last_energy(jnve) / len(structure0)
-    out["T_nve_last_K"] = base.get_last_temp(jnve)
+    out["E_nve_per_atom_eV"] = get_last_energy(jnve) / len(structure0)
+    out["T_nve_last_K"] = get_last_temp(jnve)
 
-    compressed = base.isotropic_scale(jmin.get_structure(iteration_step=-1), 0.97)
+    compressed = isotropic_scale(jmin.get_structure(iteration_step=-1), 0.97)
     jcomp = run_static_resume(
         pr,
-        base.jname("glass_compressed", pot_spec, mode_dev, composition_id=composition_id),
+        jname("glass_compressed", pot_spec, mode_dev, composition_id=composition_id),
         compressed,
         pot_spec,
         cores=cores,
     )
-    out["E_compressed_per_atom_eV"] = base.get_last_energy(jcomp) / len(compressed)
-    out["job_glass_min"] = base.jname("glass_min", pot_spec, mode_dev, composition_id=composition_id)
+    out["E_compressed_per_atom_eV"] = get_last_energy(jcomp) / len(compressed)
+    out["job_glass_min"] = jname("glass_min", pot_spec, mode_dev, composition_id=composition_id)
     return out
 
-
-def run_mddms_precheck_resume(
+def run_mddms_precheck(
     pr,
     structure,
     composition_id: str,
@@ -426,8 +759,8 @@ def run_mddms_precheck_resume(
     if period_steps <= 0 or total_steps <= 0:
         raise ValueError("MD-DMS precheck needs positive period_steps and total_steps")
 
-    job_name = base.jname("mddms_precheck", pot_spec, mode_dev, composition_id=composition_id)
-    job = base.cz.make_lammps_job(pr, job_name, structure, pot_spec, delete_existing=False, cores=cores)
+    job_name = jname("mddms_precheck", pot_spec, mode_dev, composition_id=composition_id)
+    job = cz.make_lammps_job(pr, job_name, structure, pot_spec, delete_existing=False, cores=cores)
     job.calc_md(temperature=temperature_K, n_ionic_steps=total_steps, time_step=timestep_fs)
     job.input.control["variable___thermotime"] = f"equal {max(10, int(stress_every))}"
     job.input.control["neighbor"] = "1.0 bin"
@@ -451,7 +784,7 @@ def run_mddms_precheck_resume(
         "c_mddms_stress[4] c_mddms_stress[5] c_mddms_stress[6]"
     )
     job.input.control["dump_modify___mddms_atoms"] = "sort id"
-    job = base.cz.load_or_run(pr, job)
+    job = cz.load_or_run(pr, job)
 
     wd = Path(job.working_directory)
     stress_file = wd / "system_stress_strain.dat"
@@ -474,9 +807,9 @@ def run_mddms_precheck_resume(
         "atom_dump_exists": atom_dump.exists(),
         "stress_file_size_B": stress_file.stat().st_size if stress_file.exists() else np.nan,
         "atom_dump_size_B": atom_dump.stat().st_size if atom_dump.exists() else np.nan,
-        "E_last_eV": base.get_last_energy(job),
-        "T_last_K": base.get_last_temp(job),
-        "P_last_bar_like": base.get_last_press(job),
+        "E_last_eV": get_last_energy(job),
+        "T_last_K": get_last_temp(job),
+        "P_last_bar_like": get_last_press(job),
     }
     if stress_file.exists():
         try:
@@ -494,14 +827,11 @@ def run_mddms_precheck_resume(
             out["signal_read_error"] = str(exc)
     return out
 
-
 def ensure_columns(df: pd.DataFrame, columns: Sequence[str]) -> pd.DataFrame:
     for col in columns:
         if col not in df.columns:
             df[col] = np.nan
     return df
-
-
 def error_row(block: str, pot_id: str, structure: str | None = None, composition_id: str | None = None, exc: Exception | str = "") -> Dict[str, Any]:
     row: Dict[str, Any] = {"pot_id": pot_id, "block": block, "error": str(exc)}
     if structure is not None:
@@ -509,23 +839,20 @@ def error_row(block: str, pot_id: str, structure: str | None = None, composition
     if composition_id is not None:
         row["composition_id"] = composition_id
     return row
-
-
 def save_progress(rows: Sequence[Dict[str, Any]], path: Path) -> None:
-    base.save_dataframe(pd.DataFrame(rows), path)
-
+    save_dataframe(pd.DataFrame(rows), path)
 
 def main() -> int:
     args = parse_args()
     mode_dev = args.mode == "dev"
-    base.configure_threads(mode_dev)
-    cz = base.import_helper(args.helper_module)
-    base.cz = cz
+    configure_threads(mode_dev)
+    cz = import_helper(args.helper_module)
+    cz = cz
 
     project_path = resolve_path(args.project_path, base_dir=PROJECT_ROOT)
     results_dir = resolve_path(args.results_dir, base_dir=PROJECT_ROOT)
     results_dir.mkdir(parents=True, exist_ok=True)
-    pr = base.Project(str(project_path))
+    pr = Project(str(project_path))
 
     all_pots = register_potentials(cz, args)
     pots_to_run = select_potentials(all_pots, args.pots)
@@ -564,7 +891,7 @@ def main() -> int:
         "mddms_stress_every": int(args.mddms_stress_every),
         "mddms_atom_dump_every": int(args.mddms_atom_dump_every),
     }
-    base.save_json(settings, results_dir / "run_settings.json")
+    save_json(settings, results_dir / "run_settings.json")
 
     pot_df = pd.DataFrame(
         [
@@ -578,20 +905,20 @@ def main() -> int:
             for p in pots_to_run
         ]
     )
-    base.save_dataframe(pot_df, results_dir / "potentials_selected.csv")
+    save_dataframe(pot_df, results_dir / "potentials_selected.csv")
 
     glass_meta_rows = []
     for i, cid in enumerate(glass_composition_ids):
-        seed_structure = base.make_glass_seed(cid, rep=glass_rep, rng_seed=args.seed + i)
-        comp = base.composition_from_structure(seed_structure)
+        seed_structure = make_glass_seed(cid, rep=glass_rep, rng_seed=args.seed + i)
+        comp = composition_from_structure(seed_structure)
         glass_meta_rows.append({"composition_id": cid, **comp, "rep": "x".join(map(str, glass_rep))})
-    base.save_dataframe(pd.DataFrame(glass_meta_rows), results_dir / "glass_compositions_selected.csv")
+    save_dataframe(pd.DataFrame(glass_meta_rows), results_dir / "glass_compositions_selected.csv")
 
-    fcc_cu = base.make_fcc_cu()
-    hcp_zr = base.make_hcp_zr()
-    b2_cuzr = base.make_b2_cuzr()
+    fcc_cu = make_fcc_cu()
+    hcp_zr = make_hcp_zr()
+    b2_cuzr = make_b2_cuzr()
     glass_seeds = {
-        cid: base.make_glass_seed(cid, rep=glass_rep, rng_seed=args.seed + i)
+        cid: make_glass_seed(cid, rep=glass_rep, rng_seed=args.seed + i)
         for i, cid in enumerate(glass_composition_ids)
     }
 
@@ -602,19 +929,19 @@ def main() -> int:
             try:
                 j_static = run_static_resume(
                     pr=pr,
-                    job_name=base.jname("smoke_static_b2", p, mode_dev),
+                    job_name=jname("smoke_static_b2", p, mode_dev),
                     structure=b2_cuzr,
                     pot_spec=p,
                     cores=runtime["cores"],
                 )
-                smoke_rows.append(base.static_summary(j_static, "smoke_static", p["id"], "B2_CuZr"))
+                smoke_rows.append(static_summary(j_static, "smoke_static", p["id"], "B2_CuZr"))
             except Exception as exc:
                 smoke_rows.append(error_row("smoke_static", p["id"], structure="B2_CuZr", exc=exc))
             save_progress(smoke_rows, results_dir / "smoke_validation.csv")
             try:
-                j_md = base.cz.run_md(
+                j_md = cz.run_md(
                     pr=pr,
-                    job_name=base.jname("smoke_md_b2", p, mode_dev),
+                    job_name=jname("smoke_md_b2", p, mode_dev),
                     structure=b2_cuzr,
                     pot_spec=p,
                     T=300,
@@ -626,7 +953,7 @@ def main() -> int:
                     dump_every=10,
                     neigh_every=10,
                 )
-                smoke_rows.append(base.md_summary(j_md, "smoke_md", p["id"], "B2_CuZr"))
+                smoke_rows.append(md_summary(j_md, "smoke_md", p["id"], "B2_CuZr"))
             except Exception as exc:
                 smoke_rows.append(error_row("smoke_md", p["id"], structure="B2_CuZr", exc=exc))
             save_progress(smoke_rows, results_dir / "smoke_validation.csv")
@@ -639,15 +966,15 @@ def main() -> int:
             for structure, sname in structure_map:
                 for i, s in enumerate(runtime["eos_scales"]):
                     try:
-                        struct_s = base.isotropic_scale(structure, float(s))
+                        struct_s = isotropic_scale(structure, float(s))
                         job = run_static_resume(
                             pr=pr,
-                            job_name=base.jname(f"eos_{sname}_{i:02d}", p, mode_dev),
+                            job_name=jname(f"eos_{sname}_{i:02d}", p, mode_dev),
                             structure=struct_s,
                             pot_spec=p,
                             cores=runtime["cores"],
                         )
-                        eos_rows.append(base.static_summary(job, "eos", p["id"], sname, scale=float(s)))
+                        eos_rows.append(static_summary(job, "eos", p["id"], sname, scale=float(s)))
                     except Exception as exc:
                         eos_rows.append({
                             "pot_id": p["id"],
@@ -664,7 +991,7 @@ def main() -> int:
         if len(eos_df):
             plot_df = eos_df[pd.notna(eos_df.get("energy_per_atom_eV", pd.Series(dtype=float)))]
             if len(plot_df):
-                base.plot_eos(plot_df, results_dir)
+                plot_eos(plot_df, results_dir)
     else:
         eos_df = pd.DataFrame()
 
@@ -675,7 +1002,7 @@ def main() -> int:
                 print(f"RUNNING GLASS PIPELINE: {p['id']} / {composition_id}", flush=True)
                 try:
                     ncl_rows.append(
-                        ncl_validation_pipeline_resume(
+                        ncl_validation_pipeline(
                             pr=pr,
                             structure0=glass_seeds[composition_id],
                             composition_id=composition_id,
@@ -709,10 +1036,10 @@ def main() -> int:
         for p in pots_to_run:
             print(f"MD-DMS PRECHECK: {p['id']} / {precheck_cid}", flush=True)
             try:
-                jmin = pr.load(base.jname("glass_min", p, mode_dev, composition_id=precheck_cid))
-                s_pre = base.safe_last_structure(jmin)
+                jmin = pr.load(jname("glass_min", p, mode_dev, composition_id=precheck_cid))
+                s_pre = safe_last_structure(jmin)
                 mddms_rows.append(
-                    run_mddms_precheck_resume(
+                    run_mddms_precheck(
                         pr=pr,
                         structure=s_pre,
                         composition_id=precheck_cid,
@@ -742,12 +1069,12 @@ def main() -> int:
                         {
                             "pot_id": pot_id,
                             "structure": sname,
-                            "bulk_modulus_GPa_est": base.local_bulk_modulus_from_eos(structure, sub),
+                            "bulk_modulus_GPa_est": local_bulk_modulus_from_eos(structure, sub),
                         }
                     )
                 except Exception as exc:
                     bulk_rows.append({"pot_id": pot_id, "structure": sname, "bulk_modulus_GPa_est": np.nan, "error": str(exc)})
-        base.save_dataframe(pd.DataFrame(bulk_rows), results_dir / "bulk_modulus_estimates.csv")
+        save_dataframe(pd.DataFrame(bulk_rows), results_dir / "bulk_modulus_estimates.csv")
     bulk_df = pd.DataFrame(bulk_rows)
 
     vac_rows: List[Dict[str, Any]] = []
@@ -757,7 +1084,7 @@ def main() -> int:
             print("VACANCY:", p["id"], flush=True)
             for sname, structure, rep in vacuum_targets:
                 try:
-                    vac_rows.append(base.vacancy_formation_energy(pr, structure, sname, p, mode_dev=mode_dev, cores=runtime["cores"], repeat=rep))
+                    vac_rows.append(vacancy_formation_energy(pr, structure, sname, p, mode_dev=mode_dev, cores=runtime["cores"], repeat=rep))
                 except Exception as exc:
                     vac_rows.append(
                         {
@@ -786,7 +1113,7 @@ def main() -> int:
                     ref_energy_map[pid][sname] = float(sub.sort_values("energy_per_atom_eV").iloc[0]["energy_per_atom_eV"])
     if len(ncl_df):
         ncl_df["glass_form_energy_per_atom_eV"] = ncl_df.apply(
-            lambda row: base.glass_formation_energy_from_refs(
+            lambda row: glass_formation_energy_from_refs(
                 glass_energy_per_atom_eV=float(row["E_glass_min_per_atom_eV"]) if pd.notna(row["E_glass_min_per_atom_eV"]) else np.nan,
                 x_cu=float(row["x_cu"]) if pd.notna(row["x_cu"]) else np.nan,
                 x_zr=float(row["x_zr"]) if pd.notna(row["x_zr"]) else np.nan,
@@ -795,7 +1122,7 @@ def main() -> int:
             ),
             axis=1,
         )
-        base.save_dataframe(ncl_df, results_dir / "ncl_validation.csv")
+        save_dataframe(ncl_df, results_dir / "ncl_validation.csv")
 
     rdf_store: Dict[Tuple[str, str], Dict[str, np.ndarray]] = {}
     sq_store: Dict[Tuple[str, str], Dict[str, np.ndarray]] = {}
@@ -806,14 +1133,14 @@ def main() -> int:
             pid = p["id"]
             for composition_id in glass_composition_ids:
                 try:
-                    jmin = pr.load(base.jname("glass_min", p, mode_dev, composition_id=composition_id))
-                    s = base.safe_last_structure(jmin)
-                    ana = base.Analysis(s)
+                    jmin = pr.load(jname("glass_min", p, mode_dev, composition_id=composition_id))
+                    s = safe_last_structure(jmin)
+                    ana = Analysis(s)
                     r, g = ana.get_rdf(rmax=8.0, nbins=200)
                     rdf_store[(pid, composition_id)] = {"r": np.asarray(r), "g_r": np.asarray(g)}
-                    volume = base.get_structure_volume(s)
+                    volume = get_structure_volume(s)
                     rho = len(s) / volume
-                    sq = base.structure_factor_from_rdf(rdf_store[(pid, composition_id)]["r"], rdf_store[(pid, composition_id)]["g_r"], rho, q_grid)
+                    sq = structure_factor_from_rdf(rdf_store[(pid, composition_id)]["r"], rdf_store[(pid, composition_id)]["g_r"], rho, q_grid)
                     sq_store[(pid, composition_id)] = {"q": q_grid, "s_q": sq}
                     rdf_rows.append(
                         {
@@ -827,11 +1154,11 @@ def main() -> int:
                     rdf_rows.append(error_row("rdf_sq", pid, composition_id=composition_id, exc=exc))
                 save_progress(rdf_rows, results_dir / "rdf_summary.csv")
         if rdf_store:
-            base.plot_rdf(rdf_store, results_dir)
+            plot_rdf(rdf_store, results_dir)
             for (pid, cid), vals in rdf_store.items():
                 np.savez(results_dir / f"rdf_{pid}_{cid}.npz", r=vals["r"], g_r=vals["g_r"])
         if sq_store:
-            base.plot_sq(sq_store, results_dir)
+            plot_sq(sq_store, results_dir)
             for (pid, cid), vals in sq_store.items():
                 np.savez(results_dir / f"sq_{pid}_{cid}.npz", q=vals["q"], s_q=vals["s_q"])
 
@@ -863,7 +1190,7 @@ def main() -> int:
                         "glass_x_zr": row.get("x_zr", np.nan),
                         "glass_min_energy_per_atom_eV": row.get("E_glass_min_per_atom_eV", np.nan),
                         "glass_form_energy_per_atom_eV": row.get("glass_form_energy_per_atom_eV", np.nan),
-                        "nve_energy_shift_per_atom_eV": base.get_nve_drift_for_potential_and_composition(pid, composition_id, ncl_df),
+                        "nve_energy_shift_per_atom_eV": get_nve_drift_for_potential_and_composition(pid, composition_id, ncl_df),
                         "rdf_available": (pid, composition_id) in rdf_store,
                         "sq_available": (pid, composition_id) in sq_store,
                         "mddms_precheck_available": bool(
@@ -871,7 +1198,7 @@ def main() -> int:
                         ) if len(mddms_df) else False,
                     }
                 )
-        base.save_dataframe(pd.DataFrame(summary_rows), results_dir / "paper1_validation_summary.csv")
+        save_dataframe(pd.DataFrame(summary_rows), results_dir / "paper1_validation_summary.csv")
 
     print("\nDone.", flush=True)
     print(f"pyiron project: {pr.path}", flush=True)
@@ -881,7 +1208,6 @@ def main() -> int:
     print("Selected glass compositions:", flush=True)
     print(", ".join(glass_composition_ids), flush=True)
     return 0
-
 
 if __name__ == "__main__":
     raise SystemExit(main())
