@@ -49,6 +49,15 @@ from ase.geometry.analysis import Analysis
 from pyiron_atomistics import Project
 from ase import Atoms
 
+# Compatibility shim: some pyiron-side helpers expect a structure method named
+# get_species_symbols(), while ASE Atoms provides get_chemical_symbols().
+# Keep ASE Atoms for stable copy()/repeat() behavior, but add the missing alias.
+if not hasattr(Atoms, "get_species_symbols"):
+    def _get_species_symbols(self):
+        return self.get_chemical_symbols()
+    Atoms.get_species_symbols = _get_species_symbols
+
+
 from src.path_utils import resolve_path
 
 GLASS_COMPOSITIONS: Dict[str, Tuple[float, float]] = {
