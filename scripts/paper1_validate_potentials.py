@@ -69,6 +69,9 @@ DEFAULT_EAM_NAMES = {
     "2007_Mendelev-M-I_Cu-Zr_LAMMPS_ipr1": "2007--Mendelev-M-I--Cu-Zr--LAMMPS--ipr1",
 }
 
+# Helper module handle used by the run_* helpers below.
+cz = None
+
 def import_helper(module_name: str):
     try:
         return importlib.import_module(module_name)
@@ -694,7 +697,7 @@ def ncl_validation_pipeline(
 
     prev = jm
     for T in quench_ts:
-        jq = md_from_last_resume(
+        jq = md_from_last(
             pr=pr,
             job_name=jname(f"quench_{T}K", pot_spec, mode_dev, composition_id=composition_id),
             prev_job=prev,
@@ -848,11 +851,11 @@ def save_progress(rows: Sequence[Dict[str, Any]], path: Path) -> None:
     save_dataframe(pd.DataFrame(rows), path)
 
 def main() -> int:
+    global cz
     args = parse_args()
     mode_dev = args.mode == "dev"
     configure_threads(mode_dev)
     cz = import_helper(args.helper_module)
-    cz = cz
 
     project_path = resolve_path(args.project_path, base_dir=PROJECT_ROOT)
     results_dir = resolve_path(args.results_dir, base_dir=PROJECT_ROOT)
