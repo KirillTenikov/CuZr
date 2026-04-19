@@ -47,7 +47,7 @@ import numpy as np
 import pandas as pd
 from ase.geometry.analysis import Analysis
 from pyiron_atomistics import Project
-from pyiron_atomistics.atomistics.structure.atoms import Atoms
+from ase import Atoms
 
 from src.path_utils import resolve_path
 
@@ -274,6 +274,11 @@ def configure_runtime(mode_dev: bool, args: argparse.Namespace) -> Dict[str, Any
         "dump_every": int(dump_every),
         "neigh_every": int(args.neigh_every),
     }
+
+# NOTE:
+# Use ASE Atoms for seed/crystal builders here. pyiron_atomistics.Atoms can trip over
+# empty constraint lists during copy()/repeat() in some environments, which caused the
+# glass-seed preparation failure seen on the live instance.
 
 def make_fcc_cu(a: float = 3.615, rep=(4, 4, 4)) -> Atoms:
     basis = Atoms(
