@@ -105,6 +105,12 @@ if not hasattr(Atoms, "get_species_symbols"):
 if not hasattr(Atoms, "to_hdf"):
     Atoms.to_hdf = _ase_to_hdf
 
+# Some pyiron/LAMMPS code paths access `structure.velocities` directly,
+# while ASE exposes get_velocities()/set_velocities() methods instead.
+# Provide a compatibility property so restarted MD jobs can reuse ASE atoms.
+if not hasattr(Atoms, "velocities"):
+    Atoms.velocities = property(Atoms.get_velocities, Atoms.set_velocities)
+
 
 # Helper module handle used by the run_* helpers below.
 cz = None
