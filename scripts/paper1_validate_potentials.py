@@ -107,13 +107,48 @@ if not hasattr(Atoms, "to_hdf"):
 
 
 def ensure_pyiron_structure(structure):
-    """Convert ASE Atoms to pyiron Atoms right before pyiron job submission."""
+    """
+    Convert structures to pyiron Atoms right before pyiron job submission,
+    while stripping ASE-side fields that pyiron serialization can choke on.
+    """
     try:
-        if structure.__class__.__module__.startswith("pyiron"):
-            return structure
+        s = structure.copy()
+    except Exception:
+        s = structure
+
+    # ASE constraint lists are a common source of pyiron serialization issues.
+    try:
+        if hasattr(s, "set_constraint"):
+            s.set_constraint(None)
+    except Exception:
+        try:
+            s.constraints = []
+        except Exception:
+            pass
+
+    # Drop calculator attachment if present.
+    try:
+        s.calc = None
     except Exception:
         pass
-    return ase_to_pyiron(structure.copy())
+
+    # Convert only after sanitizing the ASE object.
+    try:
+        if s.__class__.__module__.startswith("pyiron"):
+            py = s
+        else:
+            py = ase_to_pyiron(s)
+    except Exception:
+        py = ase_to_pyiron(structure.copy())
+
+    # Normalize a few common troublemakers after conversion.
+    try:
+        if hasattr(py, "constraints") and isinstance(py.constraints, list):
+            py.constraints = None
+    except Exception:
+        pass
+
+    return py
 
 # Some pyiron/LAMMPS code paths access `structure.velocities` directly,
 # while ASE exposes get_velocities()/set_velocities() methods instead.
