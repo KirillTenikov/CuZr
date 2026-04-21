@@ -124,6 +124,16 @@ if not hasattr(Atoms, "is_skewed"):
     Atoms.is_skewed = _ase_is_skewed
 
 
+# Some pyiron/LAMMPS code paths expect a pyiron-style get_species_objects()
+# method on the structure. ASE Atoms does not provide this, so delegate via
+# a temporary pyiron conversion.
+def _ase_get_species_objects(self):
+    return ase_to_pyiron(self.copy()).get_species_objects()
+
+if not hasattr(Atoms, "get_species_objects"):
+    Atoms.get_species_objects = _ase_get_species_objects
+
+
 # Helper module handle used by the run_* helpers below.
 cz = None
 
