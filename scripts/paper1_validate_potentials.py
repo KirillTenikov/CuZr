@@ -112,6 +112,18 @@ if not hasattr(Atoms, "velocities"):
     Atoms.velocities = property(Atoms.get_velocities, Atoms.set_velocities)
 
 
+# Some pyiron/LAMMPS code paths check `structure.is_skewed()` to decide
+# whether the cell is already triclinic. ASE Atoms does not provide this
+# helper, so emulate pyiron's expectation by checking for non-zero
+# off-diagonal cell components.
+def _ase_is_skewed(self):
+    cell = np.asarray(self.cell)
+    return not np.allclose(cell, np.diag(np.diag(cell)))
+
+if not hasattr(Atoms, "is_skewed"):
+    Atoms.is_skewed = _ase_is_skewed
+
+
 # Helper module handle used by the run_* helpers below.
 cz = None
 
