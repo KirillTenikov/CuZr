@@ -108,43 +108,70 @@ if not hasattr(Atoms, "to_hdf"):
 
 def ensure_pyiron_structure(structure):
     """
-    Convert structures to pyiron Atoms right before pyiron job submission,
-    while stripping ASE-side fields that pyiron serialization can choke on.
+    Convert any incoming structure to a *clean* pyiron Atoms instance.
+
+    Instead of forwarding the original ASE/pyiron object with all attached
+    metadata, rebuild a minimal geometry-only ASE structure first and then
+    convert that to pyiron. This avoids pyiron serialization failures caused
+    by constraint/calculator/list metadata such as:
+      - "list object has no attribute todict"
+      - stale ASE constraint payloads
+      - copied calculator state
     """
-    try:
-        s = structure.copy()
-    except Exception:
-        s = structure
+    symbols = list(structure.get_chemical_symbols())
+    positions = np.array(structure.get_positions(), dtype=float)
+    cell = np.array(structure.cell)
+    pbc = np.array(structure.pbc, dtype=bool)
 
-    # ASE constraint lists are a common source of pyiron serialization issues.
-    try:
-        if hasattr(s, "set_constraint"):
-            s.set_constraint(None)
-    except Exception:
-        try:
-            s.constraints = []
-        except Exception:
-            pass
+    clean = Atoms(symbols=symbols, positions=positions, cell=cell, pbc=pbc)
 
-    # Drop calculator attachment if present.
+    # Preserve velocities when available so restarted MD/NVE jobs still have
+    # sensible kinetic-state information, but only copy plain numeric arrays.
     try:
-        s.calc = None
+        v = structure.get_velocities()
+        if v is not None:
+            v = np.array(v, dtype=float)
+            if v.shape == (len(clean), 3):
+                clean.set_velocities(v)
     except Exception:
         pass
 
-    # Convert only after sanitizing the ASE object.
+    # Preserve initial magnetic moments only when they are finite numeric data.
     try:
-        if s.__class__.__module__.startswith("pyiron"):
-            py = s
-        else:
-            py = ase_to_pyiron(s)
+        m = structure.get_initial_magnetic_moments()
+        if m is not None:
+            m = np.array(m, dtype=float)
+            if m.shape == (len(clean),):
+                clean.set_initial_magnetic_moments(m)
     except Exception:
-        py = ase_to_pyiron(structure.copy())
+        pass
 
-    # Normalize a few common troublemakers after conversion.
+    # Ensure no ASE-side state survives onto the sanitized object.
     try:
-        if hasattr(py, "constraints") and isinstance(py.constraints, list):
-            py.constraints = None
+        clean.set_constraint(None)
+    except Exception:
+        try:
+            clean.constraints = []
+        except Exception:
+            pass
+    try:
+        clean.calc = None
+    except Exception:
+        pass
+    try:
+        clean.info = {}
+    except Exception:
+        pass
+
+    py = ase_to_pyiron(clean)
+
+    # Be explicit after conversion too: no calculator / no constraints.
+    try:
+        py.calc = None
+    except Exception:
+        pass
+    try:
+        py.set_constraint(None)
     except Exception:
         pass
 
