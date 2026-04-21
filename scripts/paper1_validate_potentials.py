@@ -105,6 +105,16 @@ if not hasattr(Atoms, "get_species_symbols"):
 if not hasattr(Atoms, "to_hdf"):
     Atoms.to_hdf = _ase_to_hdf
 
+
+def ensure_pyiron_structure(structure):
+    """Convert ASE Atoms to pyiron Atoms right before pyiron job submission."""
+    try:
+        if structure.__class__.__module__.startswith("pyiron"):
+            return structure
+    except Exception:
+        pass
+    return ase_to_pyiron(structure.copy())
+
 # Some pyiron/LAMMPS code paths access `structure.velocities` directly,
 # while ASE exposes get_velocities()/set_velocities() methods instead.
 # Provide a compatibility property so restarted MD jobs can reuse ASE atoms.
@@ -474,6 +484,7 @@ def md_summary(job, label: str, pot_id: str, structure_name: str) -> Dict[str, A
     }
 
 def run_static_resume(pr, job_name: str, structure, pot_spec: Dict[str, Any], cores: int):
+    structure = ensure_pyiron_structure(structure)
     job = cz.make_lammps_job(pr, job_name, structure, pot_spec, delete_existing=False, cores=cores)
     job.calc_static()
     job = cz.load_or_run(pr, job)
@@ -492,7 +503,7 @@ def md_from_last(
     neigh_every: int,
     timestep_fs: float = 1.0,
 ):
-    struct = prev_job.get_structure(iteration_step=-1)
+    struct = ensure_pyiron_structure(prev_job.get_structure(iteration_step=-1))
     return cz.run_md(
         pr=pr,
         job_name=job_name,
@@ -519,6 +530,7 @@ def run_nve(
     neigh_every: int,
     timestep_fs: float = 1.0,
 ):
+    structure = ensure_pyiron_structure(structure)
     job = cz.make_lammps_job(pr, job_name, structure, pot_spec, delete_existing=False, cores=cores)
     job.calc_md(temperature=None, pressure=None, n_ionic_steps=steps, time_step=timestep_fs)
     job.input.control["fix___ensemble"] = "all nve"
@@ -529,6 +541,7 @@ def run_nve(
     return job
 
 def run_minimize(pr: Project, job_name: str, structure: Atoms, pot_spec: Dict[str, Any], cores: int):
+    structure = ensure_pyiron_structure(structure)
     job = cz.make_lammps_job(pr, job_name, structure, pot_spec, delete_existing=False, cores=cores)
     job.calc_minimize(ionic_energy_tolerance=0.0, ionic_force_tolerance=1e-4, max_iter=200, n_print=100)
     job = cz.load_or_run(pr, job)
@@ -779,7 +792,7 @@ def ncl_validation_pipeline(
     jm = cz.run_md(
         pr=pr,
         job_name=jname("melt", pot_spec, mode_dev, composition_id=composition_id),
-        structure=structure0,
+        structure=ensure_pyiron_structure(structure0),
         pot_spec=pot_spec,
         T=T_melt,
         steps=steps_melt,
@@ -869,6 +882,7 @@ def run_mddms_precheck(
         raise ValueError("MD-DMS precheck needs positive period_steps and total_steps")
 
     job_name = jname("mddms_precheck", pot_spec, mode_dev, composition_id=composition_id)
+    structure = ensure_pyiron_structure(structure)
     job = cz.make_lammps_job(pr, job_name, structure, pot_spec, delete_existing=False, cores=cores)
     job.calc_md(temperature=temperature_K, n_ionic_steps=total_steps, time_step=timestep_fs)
     job.input.control["variable___thermotime"] = f"equal {max(10, int(stress_every))}"
