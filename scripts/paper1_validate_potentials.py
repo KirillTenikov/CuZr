@@ -31,6 +31,7 @@ import argparse
 import importlib
 import json
 import os
+import re
 import sys
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Sequence, Tuple
@@ -47,7 +48,7 @@ import numpy as np
 import pandas as pd
 from ase.geometry.analysis import Analysis
 from ase.io import write, read
-from pyiron_atomistics import Project
+from pyiron_atomistics import Project, ase_to_pyiron
 from ase import Atoms
 
 # Compatibility shim: some pyiron-side helpers expect a structure method named
@@ -93,21 +94,7 @@ def _ase_get_species_symbols(self):
     return list(dict.fromkeys(self.get_chemical_symbols()))
 
 def _ase_to_pyiron(self):
-    py = PyironAtoms(
-        symbols=self.get_chemical_symbols(),
-        positions=self.get_positions(),
-        cell=self.cell.array,
-        pbc=self.pbc,
-    )
-    # copy over extra arrays where possible, but avoid ASE core arrays
-    for key, val in getattr(self, "arrays", {}).items():
-        if key in {"numbers", "positions"}:
-            continue
-        try:
-            py.arrays[key] = val.copy()
-        except Exception:
-            pass
-    return py
+    return ase_to_pyiron(self.copy())
 
 def _ase_to_hdf(self, hdf, group_name="structure"):
     return _ase_to_pyiron(self).to_hdf(hdf, group_name=group_name)
@@ -385,10 +372,24 @@ def composition_from_structure(structure: Atoms) -> Dict[str, Any]:
         "x_zr": n_zr / n_total if n_total else np.nan,
     }
 
+def _short_pot_tag(pot_id: str) -> str:
+    aliases = {
+        "EAM_Mendelev_2019_CuZr": "EAM19",
+        "2007_Mendelev-M-I_Cu-Zr_LAMMPS_ipr1": "EAM07",
+        "ACE_514": "ACE514",
+        "ACE_1352": "ACE1352",
+    }
+    if pot_id in aliases:
+        return aliases[pot_id]
+    cleaned = re.sub(r"[^A-Za-z0-9]+", "", pot_id)
+    return cleaned[:16] if len(cleaned) > 16 else cleaned
+
+
 def jname(prefix: str, pot_spec: Dict[str, Any], mode_dev: bool, composition_id: str | None = None) -> str:
     run_tag = "dev" if mode_dev else "prod"
     comp = f"_{composition_id}" if composition_id else ""
-    return f"{run_tag}_{prefix}{comp}_{pot_spec['id']}"
+    name = f"{run_tag}_{prefix}{comp}_{_short_pot_tag(pot_spec['id'])}"
+    return name[:50]
 
 def isotropic_scale(structure: Atoms, scale: float) -> Atoms:
     s = structure.copy()
