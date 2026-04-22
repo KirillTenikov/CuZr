@@ -349,7 +349,7 @@ def run_lammps_case(
     else:
         env["OMP_NUM_THREADS"] = str(max(1, int(cpu_omp_threads)))
         if int(cpu_mpi_ranks) > 1:
-            cmd = ["mpirun", "--allow-run-as-root", "-np", str(int(cpu_mpi_ranks)), lammps_exe]
+            cmd = ["mpiexec", "-np", str(int(cpu_mpi_ranks)), lammps_exe]
         else:
             cmd = [lammps_exe]
     cmd += ["-in", input_file.name, "-log", log_file.name, "-echo", "screen"]
