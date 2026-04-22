@@ -33,7 +33,9 @@ from __future__ import annotations
 from typing import Dict, Any, Tuple, List, Optional, Iterable
 import os
 import copy
+import numpy as np
 import pandas as pd
+from pyiron_atomistics.atomistics.structure.atoms import Atoms as PyironAtoms
 
 # ----------------------------
 # Defaults
@@ -58,6 +60,56 @@ EAM_NAMES: List[str] = [
     "2007--Mendelev-M-I--Cu-Zr--LAMMPS--ipr1",
     "EAM_Mendelev_2019_CuZr__MO_945018740343_000",
 ]
+
+# ----------------------------
+# Structure sanitation
+# ----------------------------
+
+def ensure_pyiron_structure(structure):
+    """Build a clean pyiron structure before assigning it to a pyiron job."""
+    if isinstance(structure, PyironAtoms):
+        base = structure.copy()
+    else:
+        symbols = list(structure.get_chemical_symbols())
+        positions = np.array(structure.get_positions(), dtype=float)
+        cell = np.array(structure.cell, dtype=float)
+        pbc = np.array(structure.pbc, dtype=bool)
+        base = PyironAtoms(symbols=symbols, positions=positions, cell=cell, pbc=pbc)
+
+        try:
+            v = structure.get_velocities()
+            if v is not None:
+                v = np.array(v, dtype=float)
+                if v.shape == (len(base), 3):
+                    base.set_velocities(v)
+        except Exception:
+            pass
+
+        try:
+            m = structure.get_initial_magnetic_moments()
+            if m is not None:
+                m = np.array(m, dtype=float)
+                if m.shape == (len(base),):
+                    base.set_initial_magnetic_moments(m)
+        except Exception:
+            pass
+
+    try:
+        base.set_constraint(None)
+    except Exception:
+        try:
+            base.constraints = []
+        except Exception:
+            pass
+    try:
+        base.calc = None
+    except Exception:
+        pass
+    try:
+        base.info = {}
+    except Exception:
+        pass
+    return base
 
 # ----------------------------
 # Potential factories / registry
@@ -330,7 +382,7 @@ def make_lammps_job(
 ):
     """Create and configure a pyiron Lammps job."""
     job = pr.create.job.Lammps(job_name, delete_existing_job=delete_existing)
-    job.structure = structure
+    job.structure = ensure_pyiron_structure(structure)
     assign_potential(job, pot_spec)
     job.server.cores = int(cores)
     return job

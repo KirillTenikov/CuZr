@@ -49,6 +49,7 @@ import pandas as pd
 from ase.geometry.analysis import Analysis
 from ase.io import write, read
 from pyiron_atomistics import Project, ase_to_pyiron
+from pyiron_atomistics.atomistics.structure.atoms import Atoms as PyironAtoms
 from ase import Atoms
 
 # Compatibility shim: some pyiron-side helpers expect a structure method named
@@ -110,72 +111,53 @@ def ensure_pyiron_structure(structure):
     """
     Convert any incoming structure to a *clean* pyiron Atoms instance.
 
-    Instead of forwarding the original ASE/pyiron object with all attached
-    metadata, rebuild a minimal geometry-only ASE structure first and then
-    convert that to pyiron. This avoids pyiron serialization failures caused
-    by constraint/calculator/list metadata such as:
-      - "list object has no attribute todict"
-      - stale ASE constraint payloads
-      - copied calculator state
+    Instead of forwarding the original ASE/pyiron object with all attached metadata,
+    rebuild a minimal geometry-only structure and then convert/create a fresh pyiron
+    structure from that clean state.
     """
-    symbols = list(structure.get_chemical_symbols())
-    positions = np.array(structure.get_positions(), dtype=float)
-    cell = np.array(structure.cell)
-    pbc = np.array(structure.pbc, dtype=bool)
+    if isinstance(structure, PyironAtoms):
+        base = structure.copy()
+    else:
+        symbols = list(structure.get_chemical_symbols())
+        positions = np.array(structure.get_positions(), dtype=float)
+        cell = np.array(structure.cell, dtype=float)
+        pbc = np.array(structure.pbc, dtype=bool)
+        base = PyironAtoms(symbols=symbols, positions=positions, cell=cell, pbc=pbc)
 
-    clean = Atoms(symbols=symbols, positions=positions, cell=cell, pbc=pbc)
+        try:
+            v = structure.get_velocities()
+            if v is not None:
+                v = np.array(v, dtype=float)
+                if v.shape == (len(base), 3):
+                    base.set_velocities(v)
+        except Exception:
+            pass
 
-    # Preserve velocities when available so restarted MD/NVE jobs still have
-    # sensible kinetic-state information, but only copy plain numeric arrays.
+        try:
+            m = structure.get_initial_magnetic_moments()
+            if m is not None:
+                m = np.array(m, dtype=float)
+                if m.shape == (len(base),):
+                    base.set_initial_magnetic_moments(m)
+        except Exception:
+            pass
+
     try:
-        v = structure.get_velocities()
-        if v is not None:
-            v = np.array(v, dtype=float)
-            if v.shape == (len(clean), 3):
-                clean.set_velocities(v)
-    except Exception:
-        pass
-
-    # Preserve initial magnetic moments only when they are finite numeric data.
-    try:
-        m = structure.get_initial_magnetic_moments()
-        if m is not None:
-            m = np.array(m, dtype=float)
-            if m.shape == (len(clean),):
-                clean.set_initial_magnetic_moments(m)
-    except Exception:
-        pass
-
-    # Ensure no ASE-side state survives onto the sanitized object.
-    try:
-        clean.set_constraint(None)
+        base.set_constraint(None)
     except Exception:
         try:
-            clean.constraints = []
+            base.constraints = []
         except Exception:
             pass
     try:
-        clean.calc = None
+        base.calc = None
     except Exception:
         pass
     try:
-        clean.info = {}
+        base.info = {}
     except Exception:
         pass
-
-    py = ase_to_pyiron(clean)
-
-    # Be explicit after conversion too: no calculator / no constraints.
-    try:
-        py.calc = None
-    except Exception:
-        pass
-    try:
-        py.set_constraint(None)
-    except Exception:
-        pass
-
-    return py
+    return base
 
 # Some pyiron/LAMMPS code paths access `structure.velocities` directly,
 # while ASE exposes get_velocities()/set_velocities() methods instead.
@@ -1132,6 +1114,7 @@ def main() -> int:
     fcc_cu = make_fcc_cu()
     hcp_zr = make_hcp_zr()
     b2_cuzr = make_b2_cuzr()
+    b2_cuzr_py = ensure_pyiron_structure(b2_cuzr)
     glass_seeds = {
         cid: make_glass_seed(cid, rep=glass_rep, rng_seed=args.seed + i)
         for i, cid in enumerate(glass_composition_ids)
@@ -1147,7 +1130,7 @@ def main() -> int:
                 j_static = run_static_resume(
                     pr=pr,
                     job_name=jname("smoke_static_b2", p, mode_dev),
-                    structure=b2_cuzr,
+                    structure=b2_cuzr_py,
                     pot_spec=p,
                     cores=runtime["cores"],
                 )
@@ -1159,7 +1142,7 @@ def main() -> int:
                 j_md = cz.run_md(
                     pr=pr,
                     job_name=jname("smoke_md_b2", p, mode_dev),
-                    structure=b2_cuzr,
+                    structure=b2_cuzr_py,
                     pot_spec=p,
                     T=300,
                     steps=runtime["smoke_md_steps"],
