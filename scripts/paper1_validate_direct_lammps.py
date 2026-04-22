@@ -609,6 +609,9 @@ def main() -> int:
     if not args.skip_eos:
         run_eos(args, lammps_exe, pots, results_dir)
 
+    if not args.skip_vacancy:
+        run_vacancy(args, lammps_exe, pots, results_dir)
+
     print("\nDone.")
     print(f"results dir: {results_dir}")
     print("Selected potentials:")
