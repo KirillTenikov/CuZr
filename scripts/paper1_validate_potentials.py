@@ -75,9 +75,9 @@ DEFAULT_MACE_FILES = {
     "MACE_D": "CuZr_MACE_D_compiled.model-lammps.pt",
 }
 
-DEFAULT_EAM_NAMES = {
-    "EAM_Mendelev_2019_CuZr": "EAM_Mendelev_2019_CuZr__MO_945018740343_000",
-    "2007_Mendelev-M-I_Cu-Zr_LAMMPS_ipr1": "2007--Mendelev-M-I--Cu-Zr--LAMMPS--ipr1",
+DEFAULT_EAM_FILES = {
+    "EAM_Mendelev_2019_CuZr": "models/raw/eam/Cu-Zr_4.eam.fs",
+    "2007_Mendelev-M-I_Cu-Zr_LAMMPS_ipr1": "models/raw/eam/CuZr_mm.eam.fs",
 }
 
 
@@ -282,6 +282,16 @@ def parse_args() -> argparse.Namespace:
         "--skip-eam",
         action="store_true",
         help="Do not include EAM baselines in this run",
+    )
+    parser.add_argument(
+        "--eam-2019-file",
+        default=DEFAULT_EAM_FILES["EAM_Mendelev_2019_CuZr"],
+        help="Path to the local 2019 Cu-Zr EAM file for LAMMPS",
+    )
+    parser.add_argument(
+        "--eam-2007-file",
+        default=DEFAULT_EAM_FILES["2007_Mendelev-M-I_Cu-Zr_LAMMPS_ipr1"],
+        help="Path to the local 2007 Cu-Zr EAM file for LAMMPS",
     )
 
     # Block control
