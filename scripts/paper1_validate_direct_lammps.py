@@ -270,7 +270,7 @@ def run_lammps_case(
         "neigh_modify every 1 delay 0 check yes",
         f"timestep {timestep_fs/1000.0:.8f}",
         f"thermo {thermo_every}",
-        "thermo_style custom Step Temp Pe Etotal Press Vol Atoms",
+        "thermo_style custom step temp pe etotal press vol atoms",
     ]
     if mode == "static":
         lines += [
