@@ -1,0 +1,506 @@
+#!/usr/bin/env python3
+"""
+Direct LAMMPS validation driver for Cu-Zr potentials.
+
+Phase 1 replacement for the pyiron-based validation workflow:
+- smoke static
+- smoke short MD
+- EOS for FCC Cu / HCP Zr / B2 CuZr
+
+No pyiron dependency.
+"""
+from __future__ import annotations
+
+import argparse
+import csv
+import json
+import math
+import os
+import shutil
+import subprocess
+import sys
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Dict, Iterable, List, Optional, Sequence, Tuple
+
+import numpy as np
+from ase import Atoms
+from ase.build import bulk
+from ase.io import write
+
+DEFAULT_MACE_FILES = {
+    "MACE_A": "CuZr_MACE_A_compiled.model-lammps.pt",
+    "MACE_B": "CuZr_MACE_B_compiled.model-lammps.pt",
+    "MACE_C": "CuZr_MACE_C_compiled.model-lammps.pt",
+    "MACE_D": "CuZr_MACE_D_compiled.model-lammps.pt",
+}
+DEFAULT_ACE_FILES = {
+    "ACE_514": "",
+    "ACE_1352": "",
+}
+DEFAULT_EAM_FILES = {
+    "EAM_Mendelev_2019_CuZr": "models/raw/eam/Cu-Zr_4.eam.fs",
+    "2007_Mendelev-M-I_Cu-Zr_LAMMPS_ipr1": "models/raw/eam/CuZr_mm.eam.fs",
+}
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
+
+@dataclass(frozen=True)
+class PotentialSpec:
+    id: str
+    family: str
+    model_file: str
+    pair_style: str
+    pair_coeff: str
+
+
+def maybe_resolve_model_path(raw: Optional[str]) -> Optional[str]:
+    if raw is None:
+        return None
+    raw = str(raw).strip()
+    if not raw:
+        return None
+    p = Path(os.path.expanduser(raw))
+    if p.is_absolute():
+        return str(p)
+    repo_rel = (PROJECT_ROOT / p).resolve()
+    if repo_rel.exists():
+        return str(repo_rel)
+    cwd_rel = (Path.cwd() / p).resolve()
+    if cwd_rel.exists():
+        return str(cwd_rel)
+    return raw
+
+
+def infer_eam_pair_style(model_file: str) -> str:
+    low = model_file.lower()
+    if low.endswith(".eam.fs"):
+        return "eam/fs"
+    if low.endswith(".eam.alloy"):
+        return "eam/alloy"
+    if low.endswith(".eam"):
+        return "eam"
+    raise ValueError(f"Cannot infer EAM pair_style from file: {model_file}")
+
+
+def make_mace_spec(id_: str, model_file: str, elements: Tuple[str, str] = ("Cu", "Zr")) -> PotentialSpec:
+    return PotentialSpec(
+        id=id_,
+        family="MACE",
+        model_file=model_file,
+        pair_style="mace",
+        pair_coeff=f"* * {model_file} {' '.join(elements)}",
+    )
+
+
+def make_ace_spec(id_: str, model_file: str, elements: Tuple[str, str] = ("Cu", "Zr")) -> PotentialSpec:
+    return PotentialSpec(
+        id=id_,
+        family="ACE",
+        model_file=model_file,
+        pair_style="pace",
+        pair_coeff=f"* * {model_file} {' '.join(elements)}",
+    )
+
+
+def make_eam_spec(id_: str, model_file: str, elements: Tuple[str, str] = ("Cu", "Zr")) -> PotentialSpec:
+    return PotentialSpec(
+        id=id_,
+        family="EAM",
+        model_file=model_file,
+        pair_style=infer_eam_pair_style(model_file),
+        pair_coeff=f"* * {model_file} {' '.join(elements)}",
+    )
+
+
+def ensure_path_exists(path_str: str) -> str:
+    p = Path(path_str)
+    if not p.exists():
+        raise FileNotFoundError(f"Model file does not exist: {path_str}")
+    return str(p.resolve())
+
+
+def build_potentials(args: argparse.Namespace) -> List[PotentialSpec]:
+    pots: List[PotentialSpec] = []
+    for pid, default in DEFAULT_MACE_FILES.items():
+        raw = getattr(args, f"{pid.lower()}_file")
+        resolved = maybe_resolve_model_path(raw) or default
+        if Path(str(resolved)).exists():
+            pots.append(make_mace_spec(pid, ensure_path_exists(str(resolved))))
+    if not args.skip_eam:
+        eam_2019 = maybe_resolve_model_path(args.eam_2019_file) or DEFAULT_EAM_FILES["EAM_Mendelev_2019_CuZr"]
+        eam_2007 = maybe_resolve_model_path(args.eam_2007_file) or DEFAULT_EAM_FILES["2007_Mendelev-M-I_Cu-Zr_LAMMPS_ipr1"]
+        pots.append(make_eam_spec("EAM_Mendelev_2019_CuZr", ensure_path_exists(str(eam_2019))))
+        pots.append(make_eam_spec("2007_Mendelev-M-I_Cu-Zr_LAMMPS_ipr1", ensure_path_exists(str(eam_2007))))
+    for pid, default in DEFAULT_ACE_FILES.items():
+        raw = getattr(args, f"{pid.lower()}_file")
+        resolved = maybe_resolve_model_path(raw) or default
+        if resolved and Path(str(resolved)).exists():
+            pots.append(make_ace_spec(pid, ensure_path_exists(str(resolved))))
+    return pots
+
+
+def select_potentials(all_pots: Sequence[PotentialSpec], raw: str) -> List[PotentialSpec]:
+    if raw.strip().lower() == "all":
+        return list(all_pots)
+    wanted = {x.strip() for x in raw.split(",") if x.strip()}
+    selected = [p for p in all_pots if p.id in wanted]
+    missing = sorted(wanted - {p.id for p in selected})
+    if missing:
+        raise ValueError(f"Unknown potentials requested: {missing}")
+    return selected
+
+
+def make_b2_cuzr(a: float = 3.2) -> Atoms:
+    cell = np.diag([a, a, a])
+    scaled_positions = [(0.0, 0.0, 0.0), (0.5, 0.5, 0.5)]
+    atoms = Atoms(symbols=["Cu", "Zr"], cell=cell, pbc=True)
+    atoms.set_scaled_positions(scaled_positions)
+    return atoms
+
+
+def crystal_structures() -> Dict[str, Atoms]:
+    fcc_cu = bulk("Cu", "fcc", a=3.615, cubic=True)
+    hcp_zr = bulk("Zr", "hcp", a=3.232, c=5.147)
+    b2_cuzr = make_b2_cuzr()
+    return {
+        "FCC_Cu": fcc_cu,
+        "HCP_Zr": hcp_zr,
+        "B2_CuZr": b2_cuzr,
+    }
+
+
+def replicated(atoms: Atoms, reps: Tuple[int, int, int]) -> Atoms:
+    return atoms.repeat(reps)
+
+
+def sanitize_atoms(atoms: Atoms) -> Atoms:
+    clean = Atoms(
+        symbols=list(atoms.get_chemical_symbols()),
+        positions=np.array(atoms.get_positions(), dtype=float),
+        cell=np.array(atoms.cell),
+        pbc=np.array(atoms.pbc, dtype=bool),
+    )
+    return clean
+
+
+def parse_thermo_table(log_path: Path) -> Dict[str, float]:
+    header: Optional[List[str]] = None
+    last_row: Optional[List[str]] = None
+    with log_path.open() as f:
+        for raw in f:
+            line = raw.strip()
+            if not line:
+                continue
+            if line.startswith("Step "):
+                header = line.split()
+                last_row = None
+                continue
+            if header is None:
+                continue
+            parts = line.split()
+            if len(parts) != len(header):
+                continue
+            try:
+                [float(x) for x in parts]
+            except ValueError:
+                continue
+            last_row = parts
+    if header is None or last_row is None:
+        raise RuntimeError(f"Could not parse thermo table from {log_path}")
+    result: Dict[str, float] = {}
+    for k, v in zip(header, last_row):
+        try:
+            result[k] = float(v)
+        except ValueError:
+            pass
+    return result
+
+
+def locate_lammps_exe(explicit: Optional[str]) -> str:
+    candidates = [
+        explicit,
+        os.environ.get("LAMMPS_EXE"),
+        shutil.which("lmp"),
+        shutil.which("lmp_mpi"),
+        shutil.which("lmp_serial"),
+    ]
+    for c in candidates:
+        if c and Path(c).exists():
+            return str(Path(c).resolve())
+        if c and shutil.which(c):
+            return str(Path(shutil.which(c)).resolve())
+    raise FileNotFoundError("Could not find a LAMMPS executable. Set --lammps-exe or LAMMPS_EXE.")
+
+
+def write_lammps_data(path: Path, atoms: Atoms) -> None:
+    write(str(path), sanitize_atoms(atoms), format="lammps-data", atom_style="atomic")
+
+
+def run_lammps_case(
+    lammps_exe: str,
+    workdir: Path,
+    structure: Atoms,
+    potential: PotentialSpec,
+    run_name: str,
+    mode: str,
+    timestep_fs: float,
+    md_steps: int,
+    thermo_every: int,
+    seed: int,
+) -> Dict[str, float]:
+    workdir.mkdir(parents=True, exist_ok=True)
+    data_file = workdir / f"{run_name}.data"
+    input_file = workdir / f"{run_name}.in"
+    log_file = workdir / f"{run_name}.log"
+    dump_file = workdir / f"{run_name}.lammpstrj"
+
+    atoms = sanitize_atoms(structure)
+    write_lammps_data(data_file, atoms)
+
+    lines = [
+        "units metal",
+        "atom_style atomic",
+        "boundary p p p",
+        f"read_data {data_file.name}",
+        f"pair_style {potential.pair_style}",
+        f"pair_coeff {potential.pair_coeff}",
+        "neighbor 2.0 bin",
+        "neigh_modify every 1 delay 0 check yes",
+        f"timestep {timestep_fs/1000.0:.8f}",
+        f"thermo {thermo_every}",
+        "thermo_style custom Step Temp Pe Etotal Press Vol Atoms",
+    ]
+    if mode == "static":
+        lines += [
+            "run 0",
+        ]
+    elif mode == "md":
+        lines += [
+            f"velocity all create 300.0 {seed} mom yes rot yes dist gaussian",
+            "fix int all nvt temp 300.0 300.0 0.1",
+            f"dump d1 all custom {max(1, md_steps)} {dump_file.name} id type x y z",
+            f"run {md_steps}",
+            "unfix int",
+            "undump d1",
+        ]
+    else:
+        raise ValueError(f"Unknown mode: {mode}")
+
+    input_file.write_text("\n".join(lines) + "\n")
+    cmd = [lammps_exe, "-in", input_file.name, "-log", log_file.name, "-echo", "screen"]
+    cp = subprocess.run(cmd, cwd=workdir, text=True, capture_output=True)
+    if cp.returncode != 0:
+        raise RuntimeError(
+            f"LAMMPS failed for {run_name}\nSTDOUT:\n{cp.stdout}\nSTDERR:\n{cp.stderr}"
+        )
+    thermo = parse_thermo_table(log_file)
+    thermo["volume_A3"] = thermo.pop("Vol", math.nan)
+    thermo["energy_eV"] = thermo.pop("Pe", math.nan)
+    thermo["etotal_eV"] = thermo.pop("Etotal", math.nan)
+    thermo["temp_K"] = thermo.pop("Temp", math.nan)
+    thermo["pressure_bar"] = thermo.pop("Press", math.nan)
+    thermo["atoms"] = int(thermo.pop("Atoms", len(atoms)))
+    thermo["energy_per_atom_eV"] = (
+        thermo["energy_eV"] / thermo["atoms"] if thermo["atoms"] else math.nan
+    )
+    return thermo
+
+
+def append_rows(csv_path: Path, rows: Sequence[Dict[str, object]]) -> None:
+    if not rows:
+        return
+    csv_path.parent.mkdir(parents=True, exist_ok=True)
+    fieldnames = list(rows[0].keys())
+    exists = csv_path.exists()
+    with csv_path.open("a", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        if not exists:
+            writer.writeheader()
+        writer.writerows(rows)
+
+
+def save_json(path: Path, data: Dict[str, object]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, indent=2))
+
+
+def run_smoke(
+    args: argparse.Namespace,
+    lammps_exe: str,
+    potentials: Sequence[PotentialSpec],
+    results_dir: Path,
+) -> None:
+    rows: List[Dict[str, object]] = []
+    b2 = replicated(make_b2_cuzr(), args.smoke_rep)
+    for pot in potentials:
+        print(f"SMOKE TEST: {pot.id}")
+        for block, mode in [("smoke_static", "static"), ("smoke_md", "md")]:
+            case_dir = results_dir / "tmp" / pot.id / block
+            try:
+                thermo = run_lammps_case(
+                    lammps_exe=lammps_exe,
+                    workdir=case_dir,
+                    structure=b2,
+                    potential=pot,
+                    run_name=f"{pot.id}_{block}",
+                    mode=mode,
+                    timestep_fs=args.timestep_fs,
+                    md_steps=args.smoke_md_steps,
+                    thermo_every=max(1, min(args.smoke_md_steps, args.smoke_thermo)),
+                    seed=args.seed,
+                )
+                rows.append(
+                    {
+                        "pot_id": pot.id,
+                        "block": block,
+                        "error": "",
+                        "structure": "B2_CuZr",
+                        "energy_eV": thermo["energy_eV"],
+                        "energy_per_atom_eV": thermo["energy_per_atom_eV"],
+                        "volume_A3": thermo["volume_A3"],
+                        "temp_K": thermo["temp_K"],
+                    }
+                )
+            except Exception as e:
+                rows.append(
+                    {
+                        "pot_id": pot.id,
+                        "block": block,
+                        "error": str(e),
+                        "structure": "B2_CuZr",
+                        "energy_eV": "",
+                        "energy_per_atom_eV": "",
+                        "volume_A3": "",
+                        "temp_K": "",
+                    }
+                )
+    append_rows(results_dir / "smoke_validation.csv", rows)
+
+
+def scale_structure(atoms: Atoms, scale: float) -> Atoms:
+    scaled = sanitize_atoms(atoms)
+    scaled.set_cell(np.array(scaled.cell) * scale, scale_atoms=True)
+    return scaled
+
+
+def run_eos(
+    args: argparse.Namespace,
+    lammps_exe: str,
+    potentials: Sequence[PotentialSpec],
+    results_dir: Path,
+) -> None:
+    rows: List[Dict[str, object]] = []
+    structures = crystal_structures()
+    scales = np.linspace(args.eos_min_scale, args.eos_max_scale, args.eos_points)
+    for pot in potentials:
+        for sname, atoms in structures.items():
+            print(f"EOS: {pot.id} / {sname}")
+            for scale in scales:
+                case_dir = results_dir / "tmp" / pot.id / "eos" / sname / f"{scale:.6f}"
+                try:
+                    thermo = run_lammps_case(
+                        lammps_exe=lammps_exe,
+                        workdir=case_dir,
+                        structure=scale_structure(atoms, float(scale)),
+                        potential=pot,
+                        run_name=f"{pot.id}_{sname}_{scale:.6f}",
+                        mode="static",
+                        timestep_fs=args.timestep_fs,
+                        md_steps=0,
+                        thermo_every=1,
+                        seed=args.seed,
+                    )
+                    rows.append(
+                        {
+                            "pot_id": pot.id,
+                            "stage": "eos",
+                            "structure": sname,
+                            "scale": scale,
+                            "energy_eV": thermo["energy_eV"],
+                            "energy_per_atom_eV": thermo["energy_per_atom_eV"],
+                            "volume_A3": thermo["volume_A3"],
+                            "error": "",
+                        }
+                    )
+                except Exception as e:
+                    rows.append(
+                        {
+                            "pot_id": pot.id,
+                            "stage": "eos",
+                            "structure": sname,
+                            "scale": scale,
+                            "energy_eV": "",
+                            "energy_per_atom_eV": "",
+                            "volume_A3": "",
+                            "error": str(e),
+                        }
+                    )
+    append_rows(results_dir / "eos_validation.csv", rows)
+
+
+def parse_args() -> argparse.Namespace:
+    p = argparse.ArgumentParser(description="Direct LAMMPS validation without pyiron")
+    p.add_argument("--mode", choices=["dev", "prod"], default="prod")
+    p.add_argument("--results-dir", default="outputs/paper1_validation_direct")
+    p.add_argument("--lammps-exe", default=os.environ.get("LAMMPS_EXE", ""))
+    p.add_argument("--pots", default="all")
+    p.add_argument("--skip-eam", action="store_true")
+    p.add_argument("--skip-smoke", action="store_true")
+    p.add_argument("--skip-eos", action="store_true")
+    p.add_argument("--skip-vacancy", action="store_true")
+    p.add_argument("--skip-glass", action="store_true")
+    p.add_argument("--skip-rdf-sq", action="store_true")
+    p.add_argument("--skip-mddms-precheck", action="store_true")
+    p.add_argument("--seed", type=int, default=42)
+    p.add_argument("--timestep-fs", type=float, default=1.0)
+    p.add_argument("--smoke-md-steps", type=int, default=200)
+    p.add_argument("--smoke-thermo", type=int, default=20)
+    p.add_argument("--smoke-rep", default="4,4,4")
+    p.add_argument("--eos-points", type=int, default=7)
+    p.add_argument("--eos-min-scale", type=float, default=0.96)
+    p.add_argument("--eos-max-scale", type=float, default=1.04)
+    p.add_argument("--mace_a_file", default=DEFAULT_MACE_FILES["MACE_A"])
+    p.add_argument("--mace_b_file", default=DEFAULT_MACE_FILES["MACE_B"])
+    p.add_argument("--mace_c_file", default=DEFAULT_MACE_FILES["MACE_C"])
+    p.add_argument("--mace_d_file", default=DEFAULT_MACE_FILES["MACE_D"])
+    p.add_argument("--ace_514_file", default=DEFAULT_ACE_FILES["ACE_514"])
+    p.add_argument("--ace_1352_file", default=DEFAULT_ACE_FILES["ACE_1352"])
+    p.add_argument("--eam-2019-file", default=DEFAULT_EAM_FILES["EAM_Mendelev_2019_CuZr"])
+    p.add_argument("--eam-2007-file", default=DEFAULT_EAM_FILES["2007_Mendelev-M-I_Cu-Zr_LAMMPS_ipr1"])
+    args = p.parse_args()
+    args.smoke_rep = tuple(int(x) for x in str(args.smoke_rep).split(","))
+    if len(args.smoke_rep) != 3:
+        raise ValueError("--smoke-rep must have exactly three integers")
+    return args
+
+
+def main() -> int:
+    args = parse_args()
+    lammps_exe = locate_lammps_exe(args.lammps_exe)
+    all_pots = build_potentials(args)
+    pots = select_potentials(all_pots, args.pots)
+
+    results_dir = Path(args.results_dir).resolve()
+    results_dir.mkdir(parents=True, exist_ok=True)
+    save_json(results_dir / "run_settings.json", vars(args))
+    append_rows(results_dir / "potentials_selected.csv", [
+        {"pot_id": p.id, "family": p.family, "pair_style": p.pair_style, "model_file": p.model_file}
+        for p in pots
+    ])
+
+    if not args.skip_smoke:
+        run_smoke(args, lammps_exe, pots, results_dir)
+    if not args.skip_eos:
+        run_eos(args, lammps_exe, pots, results_dir)
+
+    print("\nDone.")
+    print(f"results dir: {results_dir}")
+    print("Selected potentials:")
+    print(", ".join(p.id for p in pots))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
