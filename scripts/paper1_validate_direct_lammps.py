@@ -282,6 +282,10 @@ def run_lammps_case(
     md_steps: int,
     thermo_every: int,
     seed: int,
+    cpu_mpi_ranks: int = 20,
+    cpu_omp_threads: int = 2,
+    mace_omp_threads: int = 4,
+    mace_kokkos_gpus: int = 1,
     min_etol: float = 1.0e-12,
     min_ftol: float = 1.0e-12,
     min_maxiter: int = 2000,
@@ -332,11 +336,24 @@ def run_lammps_case(
         raise ValueError(f"Unknown mode: {mode}")
 
     input_file.write_text("\n".join(lines) + "\n")
-    cmd = [lammps_exe]
+    env = os.environ.copy()
+    cmd: List[str]
     if potential.family == "MACE":
-        cmd += ["-k", "on", "g", "1", "-sf", "kk", "-pk", "kokkos", "newton", "on", "neigh", "half"]
+        env["OMP_NUM_THREADS"] = str(max(1, int(mace_omp_threads)))
+        cmd = [
+            lammps_exe,
+            "-k", "on", "g", str(max(1, int(mace_kokkos_gpus))),
+            "-sf", "kk",
+            "-pk", "kokkos", "newton", "on", "neigh", "half",
+        ]
+    else:
+        env["OMP_NUM_THREADS"] = str(max(1, int(cpu_omp_threads)))
+        if int(cpu_mpi_ranks) > 1:
+            cmd = ["mpirun", "--allow-run-as-root", "-np", str(int(cpu_mpi_ranks)), lammps_exe]
+        else:
+            cmd = [lammps_exe]
     cmd += ["-in", input_file.name, "-log", log_file.name, "-echo", "screen"]
-    cp = subprocess.run(cmd, cwd=workdir, text=True, capture_output=True)
+    cp = subprocess.run(cmd, cwd=workdir, text=True, capture_output=True, env=env)
     if cp.returncode != 0:
         raise RuntimeError(
             f"LAMMPS failed for {run_name}\nSTDOUT:\n{cp.stdout}\nSTDERR:\n{cp.stderr}"
@@ -577,6 +594,10 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--mode", choices=["dev", "prod"], default="prod")
     p.add_argument("--results-dir", default="outputs/paper1_validation_direct")
     p.add_argument("--lammps-exe", default=os.environ.get("LAMMPS_EXE", ""))
+    p.add_argument("--cpu-mpi-ranks", type=int, default=20, help="MPI ranks for CPU-driven EAM/ACE jobs")
+    p.add_argument("--cpu-omp-threads", type=int, default=2, help="OpenMP threads per CPU MPI rank for EAM/ACE jobs")
+    p.add_argument("--mace-omp-threads", type=int, default=4, help="OpenMP threads for MACE ML-IAP runs")
+    p.add_argument("--mace-kokkos-gpus", type=int, default=1, help="Number of GPUs for MACE Kokkos launch")
     p.add_argument("--pots", default="all")
     p.add_argument("--skip-mace", action="store_true")
     p.add_argument("--skip-ace", action="store_true")
