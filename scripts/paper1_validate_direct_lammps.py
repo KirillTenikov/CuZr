@@ -9,6 +9,8 @@ Direct replacement for the pyiron-based validation workflow:
 - smoke short MD
 - EOS for FCC Cu / HCP Zr / B2 CuZr
 - vacancy formation for FCC Cu / HCP Zr
+- basic amorphous melt/quench/minimize sanity checks
+- RDF peak summary for minimized glasses
 
 No pyiron dependency.
 """
@@ -19,6 +21,7 @@ import csv
 import json
 import math
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -233,8 +236,14 @@ def unique_species_in_order(atoms: Atoms) -> List[str]:
     return species
 
 
+def species_mapping_for_structure(atoms: Atoms) -> List[str]:
+    present = set(atoms.get_chemical_symbols())
+    canonical = [s for s in ("Cu", "Zr") if s in present]
+    return canonical if canonical else unique_species_in_order(atoms)
+
+
 def pair_coeff_for_structure(potential: PotentialSpec, atoms: Atoms) -> str:
-    species_order = unique_species_in_order(atoms)
+    species_order = species_mapping_for_structure(atoms)
     if potential.family == "EAM":
         return f"* * {potential.model_file} {' '.join(species_order)}"
     if potential.family == "ACE":
@@ -246,7 +255,7 @@ def pair_coeff_for_structure(potential: PotentialSpec, atoms: Atoms) -> str:
 
 def mass_commands_for_structure(atoms: Atoms) -> List[str]:
     cmds: List[str] = []
-    for i, elem in enumerate(unique_species_in_order(atoms), start=1):
+    for i, elem in enumerate(species_mapping_for_structure(atoms), start=1):
         mass = float(atomic_masses[atomic_numbers[elem]])
         cmds.append(f"mass {i} {mass:.8f}")
     return cmds
@@ -463,6 +472,246 @@ def make_vacancy_structure(atoms: Atoms, atom_index: int = 0) -> Atoms:
         raise IndexError(f"Vacancy atom_index {atom_index} out of range for {len(s)} atoms")
     del s[atom_index]
     return s
+
+def parse_composition_id(comp: str) -> Tuple[int, int]:
+    m = re.fullmatch(r"Cu(\d+)Zr(\d+)", comp.strip())
+    if not m:
+        raise ValueError(f"Invalid composition id: {comp}")
+    cu = int(m.group(1))
+    zr = int(m.group(2))
+    if cu + zr != 100:
+        raise ValueError(f"Composition must sum to 100: {comp}")
+    return cu, zr
+
+
+def build_glass_seed(composition_id: str, reps: Tuple[int, int, int], seed: int) -> Atoms:
+    cu_pct, zr_pct = parse_composition_id(composition_id)
+    base = replicated(make_b2_cuzr(), reps)
+    n = len(base)
+    n_cu = int(round(n * cu_pct / 100.0))
+    n_cu = max(1, min(n - 1, n_cu))
+    symbols = np.array(["Cu"] * n_cu + ["Zr"] * (n - n_cu), dtype=object)
+    rng = np.random.default_rng(seed)
+    rng.shuffle(symbols)
+    base = sanitize_atoms(base)
+    base.set_chemical_symbols(symbols.tolist())
+    return base
+
+
+def parse_last_lammpstrj(path: Path, type_to_symbol: Dict[int, str]) -> Atoms:
+    text = path.read_text().strip().splitlines()
+    i = 0
+    last = None
+    while i < len(text):
+        if text[i].startswith('ITEM: TIMESTEP'):
+            timestep = int(text[i+1].strip())
+            assert text[i+2].startswith('ITEM: NUMBER OF ATOMS')
+            natoms = int(text[i+3].strip())
+            assert text[i+4].startswith('ITEM: BOX BOUNDS')
+            xlo, xhi = map(float, text[i+5].split()[:2])
+            ylo, yhi = map(float, text[i+6].split()[:2])
+            zlo, zhi = map(float, text[i+7].split()[:2])
+            header = text[i+8].split()[2:]
+            rows = [text[i+9+j].split() for j in range(natoms)]
+            last = (timestep, natoms, (xlo, xhi, ylo, yhi, zlo, zhi), header, rows)
+            i = i + 9 + natoms
+        else:
+            i += 1
+    if last is None:
+        raise RuntimeError(f'Could not parse dump file: {path}')
+    _, natoms, bounds, header, rows = last
+    col = {name: idx for idx, name in enumerate(header)}
+    req = ['id', 'type', 'x', 'y', 'z']
+    for r in req:
+        if r not in col:
+            raise RuntimeError(f'Dump file missing column {r}: {path}')
+    rows = sorted(rows, key=lambda r: int(r[col['id']]))
+    symbols = [type_to_symbol[int(r[col['type']])] for r in rows]
+    positions = np.array([[float(r[col['x']]), float(r[col['y']]), float(r[col['z']])] for r in rows], dtype=float)
+    xlo, xhi, ylo, yhi, zlo, zhi = bounds
+    cell = np.diag([xhi - xlo, yhi - ylo, zhi - zlo])
+    atoms = Atoms(symbols=symbols, positions=positions, cell=cell, pbc=True)
+    return atoms
+
+
+def total_rdf_summary(atoms: Atoms, rmax: float, bins: int) -> Dict[str, float]:
+    d = atoms.get_all_distances(mic=True)
+    iu = np.triu_indices(len(atoms), k=1)
+    dist = d[iu]
+    dist = dist[dist < rmax]
+    edges = np.linspace(0.0, rmax, bins + 1)
+    counts, _ = np.histogram(dist, bins=edges)
+    dr = edges[1] - edges[0]
+    r = 0.5 * (edges[:-1] + edges[1:])
+    rho = len(atoms) / atoms.get_volume()
+    shell_vol = 4.0 * np.pi * r * r * dr
+    expected = 0.5 * len(atoms) * rho * shell_vol
+    g = np.divide(counts, expected, out=np.zeros_like(r), where=expected > 0)
+    valid = r > 1.5 * dr
+    if not np.any(valid):
+        return {"rdf_peak_r_A": math.nan, "rdf_peak_g": math.nan}
+    rv = r[valid]
+    gv = g[valid]
+    imax = int(np.argmax(gv))
+    return {"rdf_peak_r_A": float(rv[imax]), "rdf_peak_g": float(gv[imax])}
+
+
+def density_g_cm3(atoms: Atoms) -> float:
+    mass_amu = sum(float(atomic_masses[atomic_numbers[s]]) for s in atoms.get_chemical_symbols())
+    return mass_amu * 1.66053906660 / atoms.get_volume()
+
+
+def run_glass_case(
+    args: argparse.Namespace,
+    lammps_exe: str,
+    workdir: Path,
+    structure: Atoms,
+    potential: PotentialSpec,
+    run_name: str,
+) -> Tuple[Dict[str, float], Path, Dict[int, str]]:
+    workdir.mkdir(parents=True, exist_ok=True)
+    data_file = workdir / f"{run_name}.data"
+    input_file = workdir / f"{run_name}.in"
+    log_file = workdir / f"{run_name}.log"
+    dump_file = workdir / f"{run_name}_final.lammpstrj"
+
+    atoms = sanitize_atoms(structure)
+    write_lammps_data(data_file, atoms)
+    species = species_mapping_for_structure(atoms)
+    type_to_symbol = {i + 1: s for i, s in enumerate(species)}
+
+    lines = [
+        'units metal',
+        'atom_style atomic',
+        'boundary p p p',
+        f'read_data {data_file.name}',
+        f'pair_style {potential.pair_style}',
+        f'pair_coeff {pair_coeff_for_structure(potential, atoms)}',
+        *mass_commands_for_structure(atoms),
+        'neighbor 2.0 bin',
+        'neigh_modify every 1 delay 0 check yes',
+        f'timestep {args.timestep_fs/1000.0:.8f}',
+        f'thermo {max(1, int(args.glass_thermo))}',
+        'thermo_style custom step temp pe etotal press vol atoms',
+        f'velocity all create {float(args.glass_temp_high):.6f} {int(args.seed)} mom yes rot yes dist gaussian',
+        f'fix fmelt all nvt temp {float(args.glass_temp_high):.6f} {float(args.glass_temp_high):.6f} {float(args.glass_tdamp_ps):.6f}',
+        f'run {int(args.glass_melt_steps)}',
+        'unfix fmelt',
+        f'fix fquench all nvt temp {float(args.glass_temp_high):.6f} {float(args.glass_temp_low):.6f} {float(args.glass_tdamp_ps):.6f}',
+        f'run {int(args.glass_quench_steps)}',
+        'unfix fquench',
+        'min_style cg',
+        f'minimize 1.0e-12 1.0e-12 {int(args.glass_min_maxiter)} {int(args.glass_min_maxeval)}',
+        f'dump d1 all custom 1 {dump_file.name} id type x y z',
+        'dump_modify d1 sort id',
+        'run 0',
+        'undump d1',
+    ]
+    input_file.write_text("\n".join(lines) + "\n")
+
+    env = os.environ.copy()
+    if potential.family == 'MACE':
+        env['OMP_NUM_THREADS'] = str(max(1, int(args.mace_omp_threads)))
+        cmd = [
+            lammps_exe,
+            '-k', 'on', 'g', str(max(1, int(args.mace_kokkos_gpus))),
+            '-sf', 'kk',
+            '-pk', 'kokkos', 'newton', 'on', 'neigh', 'half',
+        ]
+    else:
+        env['OMP_NUM_THREADS'] = str(max(1, int(args.cpu_omp_threads)))
+        if int(args.cpu_mpi_ranks) > 1:
+            cmd = ['mpiexec', '-np', str(int(args.cpu_mpi_ranks)), lammps_exe]
+        else:
+            cmd = [lammps_exe]
+    cmd += ['-in', input_file.name, '-log', log_file.name, '-echo', 'screen']
+    cp = subprocess.run(cmd, cwd=workdir, text=True, capture_output=True, env=env)
+    if cp.returncode != 0:
+        raise RuntimeError(
+            f"LAMMPS failed for {run_name}\nSTDOUT:\n{cp.stdout}\nSTDERR:\n{cp.stderr}"
+        )
+    thermo = parse_thermo_table(log_file)
+    def pop_first(keys, default=math.nan):
+        for key in keys:
+            if key in thermo:
+                return thermo.pop(key)
+        return default
+    thermo['volume_A3'] = pop_first(['Volume','Vol','volume','vol'])
+    thermo['energy_eV'] = pop_first(['PotEng','Pe','pe','poteng'])
+    thermo['etotal_eV'] = pop_first(['TotEng','Etotal','etotal','toteng'])
+    thermo['temp_K'] = pop_first(['Temp','temp'])
+    thermo['pressure_bar'] = pop_first(['Press','press'])
+    thermo['atoms'] = int(pop_first(['Atoms','atoms'], len(atoms)))
+    thermo['energy_per_atom_eV'] = thermo['energy_eV'] / thermo['atoms'] if thermo['atoms'] else math.nan
+    return thermo, dump_file, type_to_symbol
+
+
+def run_glass(
+    args: argparse.Namespace,
+    lammps_exe: str,
+    potentials: Sequence[PotentialSpec],
+    results_dir: Path,
+) -> None:
+    glass_rows: List[Dict[str, object]] = []
+    rdf_rows: List[Dict[str, object]] = []
+    comps = [c.strip() for c in str(args.glass_compositions).split(',') if c.strip()]
+    for pot in potentials:
+        for i, comp in enumerate(comps):
+            print(f"GLASS: {pot.id} / {comp}")
+            case_dir = results_dir / 'tmp' / pot.id / 'glass' / comp
+            try:
+                atoms0 = build_glass_seed(comp, args.glass_rep, args.seed + i)
+                thermo, dump_file, type_to_symbol = run_glass_case(args, lammps_exe, case_dir, atoms0, pot, f"{pot.id}_{comp}_glass")
+                final_atoms = parse_last_lammpstrj(dump_file, type_to_symbol)
+                cu_pct, zr_pct = parse_composition_id(comp)
+                glass_rows.append({
+                    'pot_id': pot.id,
+                    'composition_id': comp,
+                    'x_cu': cu_pct/100.0,
+                    'x_zr': zr_pct/100.0,
+                    'n_atoms': len(final_atoms),
+                    'energy_eV': thermo['energy_eV'],
+                    'energy_per_atom_eV': thermo['energy_per_atom_eV'],
+                    'volume_A3': thermo['volume_A3'],
+                    'density_g_cm3': density_g_cm3(final_atoms),
+                    'temp_K': thermo['temp_K'],
+                    'error': '',
+                })
+                if not args.skip_rdf_sq:
+                    rdf = total_rdf_summary(final_atoms, float(args.rdf_rmax_A), int(args.rdf_bins))
+                    rdf_rows.append({
+                        'pot_id': pot.id,
+                        'composition_id': comp,
+                        'rdf_peak_r_A': rdf['rdf_peak_r_A'],
+                        'rdf_peak_g': rdf['rdf_peak_g'],
+                        'error': '',
+                    })
+            except Exception as e:
+                glass_rows.append({
+                    'pot_id': pot.id,
+                    'composition_id': comp,
+                    'x_cu': '',
+                    'x_zr': '',
+                    'n_atoms': '',
+                    'energy_eV': '',
+                    'energy_per_atom_eV': '',
+                    'volume_A3': '',
+                    'density_g_cm3': '',
+                    'temp_K': '',
+                    'error': str(e),
+                })
+                if not args.skip_rdf_sq:
+                    rdf_rows.append({
+                        'pot_id': pot.id,
+                        'composition_id': comp,
+                        'rdf_peak_r_A': '',
+                        'rdf_peak_g': '',
+                        'error': str(e),
+                    })
+    append_rows(results_dir / 'glass_validation.csv', glass_rows)
+    if rdf_rows:
+        append_rows(results_dir / 'rdf_summary.csv', rdf_rows)
+
 
 def run_eos(
     args: argparse.Namespace,
@@ -716,6 +965,8 @@ def generate_summary_outputs(results_dir: Path) -> None:
     smoke_rows = dedupe_rows(read_csv_rows(results_dir / "smoke_validation.csv"), ["pot_id", "block", "structure"])
     eos_rows = dedupe_rows(read_csv_rows(results_dir / "eos_validation.csv"), ["pot_id", "structure", "scale"])
     vac_rows = dedupe_rows(read_csv_rows(results_dir / "vacancy_formation.csv"), ["pot_id", "structure", "repeat"])
+    glass_rows = dedupe_rows(read_csv_rows(results_dir / "glass_validation.csv"), ["pot_id", "composition_id"])
+    rdf_rows = dedupe_rows(read_csv_rows(results_dir / "rdf_summary.csv"), ["pot_id", "composition_id"])
 
     bulk_rows = estimate_bulk_modulus_from_eos_rows(eos_rows) if eos_rows else []
     if bulk_rows:
@@ -732,11 +983,19 @@ def generate_summary_outputs(results_dir: Path) -> None:
     vac_map: Dict[Tuple[str, str], Dict[str, str]] = {
         (str(r.get("pot_id", "")), str(r.get("structure", ""))): r for r in vac_rows
     }
+    glass_map: Dict[Tuple[str, str], Dict[str, str]] = {
+        (str(r.get("pot_id", "")), str(r.get("composition_id", ""))): r for r in glass_rows
+    }
+    rdf_map: Dict[Tuple[str, str], Dict[str, str]] = {
+        (str(r.get("pot_id", "")), str(r.get("composition_id", ""))): r for r in rdf_rows
+    }
 
     pot_ids = sorted({
         *(str(r.get("pot_id", "")) for r in smoke_rows),
         *(str(r.get("pot_id", "")) for r in eos_rows),
         *(str(r.get("pot_id", "")) for r in vac_rows),
+        *(str(r.get("pot_id", "")) for r in glass_rows),
+        *(str(r.get("pot_id", "")) for r in rdf_rows),
     })
 
     summary_rows: List[Dict[str, object]] = []
@@ -762,6 +1021,17 @@ def generate_summary_outputs(results_dir: Path) -> None:
             v = vac_map.get((pot_id, structure), {})
             row[f"{short}_vac_eV"] = v.get("e_vac_form_eV", "")
             row[f"{short}_vac_error"] = v.get("error", "")
+
+        for comp in ["Cu64Zr36", "Cu50Zr50", "Cu36Zr64"]:
+            g = glass_map.get((pot_id, comp), {})
+            r = rdf_map.get((pot_id, comp), {})
+            tag = comp.lower()
+            row[f"glass_{tag}_e_per_atom_eV"] = g.get("energy_per_atom_eV", "")
+            row[f"glass_{tag}_density_g_cm3"] = g.get("density_g_cm3", "")
+            row[f"glass_{tag}_error"] = g.get("error", "")
+            row[f"rdf_{tag}_peak_r_A"] = r.get("rdf_peak_r_A", "")
+            row[f"rdf_{tag}_peak_g"] = r.get("rdf_peak_g", "")
+            row[f"rdf_{tag}_error"] = r.get("error", "")
 
         summary_rows.append(row)
 
@@ -796,6 +1066,18 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--vacancy-atom-index", type=int, default=0)
     p.add_argument("--eos-min-scale", type=float, default=0.96)
     p.add_argument("--eos-max-scale", type=float, default=1.04)
+    p.add_argument("--glass-rep", default="5,5,5")
+    p.add_argument("--glass-compositions", default="Cu64Zr36,Cu50Zr50,Cu36Zr64")
+    p.add_argument("--glass-temp-high", type=float, default=2000.0)
+    p.add_argument("--glass-temp-low", type=float, default=300.0)
+    p.add_argument("--glass-melt-steps", type=int, default=5000)
+    p.add_argument("--glass-quench-steps", type=int, default=5000)
+    p.add_argument("--glass-thermo", type=int, default=200)
+    p.add_argument("--glass-tdamp-ps", type=float, default=0.1)
+    p.add_argument("--glass-min-maxiter", type=int, default=4000)
+    p.add_argument("--glass-min-maxeval", type=int, default=20000)
+    p.add_argument("--rdf-rmax-A", type=float, default=8.0)
+    p.add_argument("--rdf-bins", type=int, default=200)
     p.add_argument("--mace_a_file", default=DEFAULT_MACE_FILES["MACE_A"])
     p.add_argument("--mace_b_file", default=DEFAULT_MACE_FILES["MACE_B"])
     p.add_argument("--mace_c_file", default=DEFAULT_MACE_FILES["MACE_C"])
@@ -808,6 +1090,9 @@ def parse_args() -> argparse.Namespace:
     args.smoke_rep = tuple(int(x) for x in str(args.smoke_rep).split(","))
     if len(args.smoke_rep) != 3:
         raise ValueError("--smoke-rep must have exactly three integers")
+    args.glass_rep = tuple(int(x) for x in str(args.glass_rep).split(","))
+    if len(args.glass_rep) != 3:
+        raise ValueError("--glass-rep must have exactly three integers")
     return args
 
 
@@ -832,6 +1117,8 @@ def main() -> int:
 
     if not args.skip_vacancy:
         run_vacancy(args, lammps_exe, pots, results_dir)
+    if not args.skip_glass:
+        run_glass(args, lammps_exe, pots, results_dir)
 
     generate_summary_outputs(results_dir)
 
