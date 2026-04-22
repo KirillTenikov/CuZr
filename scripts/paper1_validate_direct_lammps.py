@@ -30,6 +30,7 @@ import numpy as np
 from ase import Atoms
 from ase.build import bulk
 from ase.io import write
+from ase.data import atomic_masses, atomic_numbers
 
 DEFAULT_MACE_FILES = {
     "MACE_A": "CuZr_MACE_A_compiled.model-lammps.pt",
@@ -236,6 +237,14 @@ def pair_coeff_for_structure(potential: PotentialSpec, atoms: Atoms) -> str:
         return f"* * {potential.model_file} " + " ".join(elems)
     return potential.pair_coeff
 
+
+def mass_commands_for_structure(atoms: Atoms) -> List[str]:
+    cmds: List[str] = []
+    for i, elem in enumerate(unique_species_in_order(atoms), start=1):
+        mass = float(atomic_masses[atomic_numbers[elem]])
+        cmds.append(f"mass {i} {mass:.8f}")
+    return cmds
+
 def locate_lammps_exe(explicit: Optional[str]) -> str:
     candidates = [
         explicit,
@@ -288,6 +297,7 @@ def run_lammps_case(
         f"read_data {data_file.name}",
         f"pair_style {potential.pair_style}",
         f"pair_coeff {pair_coeff_for_structure(potential, atoms)}",
+        *mass_commands_for_structure(atoms),
         "neighbor 2.0 bin",
         "neigh_modify every 1 delay 0 check yes",
         f"timestep {timestep_fs/1000.0:.8f}",
