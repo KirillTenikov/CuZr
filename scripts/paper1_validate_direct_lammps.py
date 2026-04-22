@@ -218,6 +218,21 @@ def parse_thermo_table(log_path: Path) -> Dict[str, float]:
     return result
 
 
+
+def unique_species_in_order(atoms: Atoms) -> List[str]:
+    species: List[str] = []
+    for sym in atoms.get_chemical_symbols():
+        if sym not in species:
+            species.append(sym)
+    return species
+
+
+def pair_coeff_for_structure(potential: PotentialSpec, atoms: Atoms) -> str:
+    if potential.family == "EAM":
+        elems = unique_species_in_order(atoms)
+        return f"* * {potential.model_file} " + " ".join(elems)
+    return potential.pair_coeff
+
 def locate_lammps_exe(explicit: Optional[str]) -> str:
     candidates = [
         explicit,
@@ -265,7 +280,7 @@ def run_lammps_case(
         "boundary p p p",
         f"read_data {data_file.name}",
         f"pair_style {potential.pair_style}",
-        f"pair_coeff {potential.pair_coeff}",
+        f"pair_coeff {pair_coeff_for_structure(potential, atoms)}",
         "neighbor 2.0 bin",
         "neigh_modify every 1 delay 0 check yes",
         f"timestep {timestep_fs/1000.0:.8f}",
