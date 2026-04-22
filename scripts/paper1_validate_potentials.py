@@ -325,6 +325,16 @@ def configure_threads(mode_dev: bool) -> None:
         os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
         os.environ.setdefault("VECLIB_MAXIMUM_THREADS", "1")
 
+def _infer_eam_pair_style(model_file: str) -> str:
+    low = str(model_file).lower()
+    if low.endswith(".eam.fs"):
+        return "eam/fs"
+    if low.endswith(".eam.alloy"):
+        return "eam/alloy"
+    if low.endswith(".eam"):
+        return "eam"
+    raise ValueError(f"Cannot infer EAM pair_style from file: {model_file}")
+
 def register_potentials(cz, args: argparse.Namespace) -> List[Dict[str, Any]]:
     specs: List[Dict[str, Any]] = [
         cz.make_mace_spec("MACE_A", maybe_resolve_model_path(args.mace_a_file) or DEFAULT_MACE_FILES["MACE_A"]),
@@ -334,8 +344,18 @@ def register_potentials(cz, args: argparse.Namespace) -> List[Dict[str, Any]]:
     ]
 
     if not args.skip_eam:
-        for pid, name in DEFAULT_EAM_NAMES.items():
-            specs.append(cz.make_pyiron_spec(pid, name))
+        eam_files = {
+            "EAM_Mendelev_2019_CuZr": maybe_resolve_model_path(args.eam_2019_file) or DEFAULT_EAM_FILES["EAM_Mendelev_2019_CuZr"],
+            "2007_Mendelev-M-I_Cu-Zr_LAMMPS_ipr1": maybe_resolve_model_path(args.eam_2007_file) or DEFAULT_EAM_FILES["2007_Mendelev-M-I_Cu-Zr_LAMMPS_ipr1"],
+        }
+        for pid, model_file in eam_files.items():
+            specs.append(
+                cz.make_eam_spec(
+                    pid,
+                    model_file=model_file,
+                    pair_style=_infer_eam_pair_style(model_file),
+                )
+            )
 
     ace_514 = maybe_resolve_model_path(args.ace_514_file)
     ace_1352 = maybe_resolve_model_path(args.ace_1352_file)

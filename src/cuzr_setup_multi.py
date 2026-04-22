@@ -177,6 +177,38 @@ def make_ace_spec(
     }
 
 
+def make_eam_spec(
+    id_: str,
+    model_file: str,
+    elements: Tuple[str, str] = ("Cu", "Zr"),
+    pair_style: str = "eam/fs",
+    pair_coeff: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Potential spec for one local EAM model file for LAMMPS.
+
+    Typical Cu-Zr usage with an fs-style file:
+        pair_style eam/fs
+        pair_coeff * * <model_file> Cu Zr
+    """
+    if pair_coeff is None:
+        pair_coeff = f"* * {model_file} " + " ".join(elements)
+    return {
+        "id": str(id_),
+        "mode": "custom",
+        "df": make_custom_lammps_potential_df(
+            name=str(id_),
+            model_file=str(model_file),
+            pair_style=str(pair_style),
+            pair_coeff=str(pair_coeff),
+            species=elements,
+        ),
+        "model_file": str(model_file),
+        "pair_style": str(pair_style),
+        "family": "EAM",
+    }
+
+
 def default_eam_specs() -> List[Dict[str, Any]]:
     """Return the two standard EAM baseline specs."""
     return [make_pyiron_spec(_short_pyiron_id(name), name) for name in EAM_NAMES]
