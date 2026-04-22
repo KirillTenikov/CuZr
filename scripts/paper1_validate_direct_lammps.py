@@ -332,7 +332,10 @@ def run_lammps_case(
         raise ValueError(f"Unknown mode: {mode}")
 
     input_file.write_text("\n".join(lines) + "\n")
-    cmd = [lammps_exe, "-in", input_file.name, "-log", log_file.name, "-echo", "screen"]
+    cmd = [lammps_exe]
+    if potential.family == "MACE":
+        cmd += ["-k", "on", "g", "1", "-sf", "kk", "-pk", "kokkos", "newton", "on", "neigh", "half"]
+    cmd += ["-in", input_file.name, "-log", log_file.name, "-echo", "screen"]
     cp = subprocess.run(cmd, cwd=workdir, text=True, capture_output=True)
     if cp.returncode != 0:
         raise RuntimeError(
