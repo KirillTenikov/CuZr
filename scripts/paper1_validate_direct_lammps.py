@@ -296,12 +296,19 @@ def run_lammps_case(
             f"LAMMPS failed for {run_name}\nSTDOUT:\n{cp.stdout}\nSTDERR:\n{cp.stderr}"
         )
     thermo = parse_thermo_table(log_file)
-    thermo["volume_A3"] = thermo.pop("Vol", math.nan)
-    thermo["energy_eV"] = thermo.pop("Pe", math.nan)
-    thermo["etotal_eV"] = thermo.pop("Etotal", math.nan)
-    thermo["temp_K"] = thermo.pop("Temp", math.nan)
-    thermo["pressure_bar"] = thermo.pop("Press", math.nan)
-    thermo["atoms"] = int(thermo.pop("Atoms", len(atoms)))
+
+    def pop_first(keys, default=math.nan):
+        for key in keys:
+            if key in thermo:
+                return thermo.pop(key)
+        return default
+
+    thermo["volume_A3"] = pop_first(["Volume", "Vol", "volume", "vol"])
+    thermo["energy_eV"] = pop_first(["PotEng", "Pe", "pe", "poteng"])
+    thermo["etotal_eV"] = pop_first(["TotEng", "Etotal", "etotal", "toteng"])
+    thermo["temp_K"] = pop_first(["Temp", "temp"])
+    thermo["pressure_bar"] = pop_first(["Press", "press"])
+    thermo["atoms"] = int(pop_first(["Atoms", "atoms"], len(atoms)))
     thermo["energy_per_atom_eV"] = (
         thermo["energy_eV"] / thermo["atoms"] if thermo["atoms"] else math.nan
     )
