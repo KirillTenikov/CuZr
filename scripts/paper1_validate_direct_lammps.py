@@ -234,7 +234,7 @@ def unique_species_in_order(atoms: Atoms) -> List[str]:
 
 
 def pair_coeff_for_structure(potential: PotentialSpec, atoms: Atoms) -> str:
-    species_order = unique_species_order(atoms)
+    species_order = unique_species_in_order(atoms)
     if potential.family == "EAM":
         return f"* * {potential.model_file} {' '.join(species_order)}"
     if potential.family == "ACE":
