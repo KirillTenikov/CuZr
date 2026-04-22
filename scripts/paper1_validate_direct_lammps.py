@@ -2,10 +2,13 @@
 """
 Direct LAMMPS validation driver for Cu-Zr potentials.
 
-Phase 1 replacement for the pyiron-based validation workflow:
+Direct LAMMPS validation driver for Cu-Zr potentials.
+
+Direct replacement for the pyiron-based validation workflow:
 - smoke static
 - smoke short MD
 - EOS for FCC Cu / HCP Zr / B2 CuZr
+- vacancy formation for FCC Cu / HCP Zr
 
 No pyiron dependency.
 """
@@ -264,6 +267,10 @@ def run_lammps_case(
     md_steps: int,
     thermo_every: int,
     seed: int,
+    min_etol: float = 1.0e-12,
+    min_ftol: float = 1.0e-12,
+    min_maxiter: int = 2000,
+    min_maxeval: int = 10000,
 ) -> Dict[str, float]:
     workdir.mkdir(parents=True, exist_ok=True)
     data_file = workdir / f"{run_name}.data"
@@ -299,6 +306,11 @@ def run_lammps_case(
             f"run {md_steps}",
             "unfix int",
             "undump d1",
+        ]
+    elif mode == "minimize":
+        lines += [
+            "min_style cg",
+            f"minimize {min_etol:.6e} {min_ftol:.6e} {int(min_maxiter)} {int(min_maxeval)}",
         ]
     else:
         raise ValueError(f"Unknown mode: {mode}")
@@ -407,6 +419,15 @@ def scale_structure(atoms: Atoms, scale: float) -> Atoms:
     return scaled
 
 
+
+
+def make_vacancy_structure(atoms: Atoms, atom_index: int = 0) -> Atoms:
+    s = sanitize_atoms(atoms)
+    if atom_index < 0 or atom_index >= len(s):
+        raise IndexError(f"Vacancy atom_index {atom_index} out of range for {len(s)} atoms")
+    del s[atom_index]
+    return s
+
 def run_eos(
     args: argparse.Namespace,
     lammps_exe: str,
@@ -462,6 +483,76 @@ def run_eos(
     append_rows(results_dir / "eos_validation.csv", rows)
 
 
+
+
+def run_vacancy(
+    args: argparse.Namespace,
+    lammps_exe: str,
+    potentials: Sequence[PotentialSpec],
+    results_dir: Path,
+) -> None:
+    rows: List[Dict[str, object]] = []
+    vacancy_targets = [
+        ("FCC_Cu", crystal_structures()["FCC_Cu"], (4, 4, 4)),
+        ("HCP_Zr", crystal_structures()["HCP_Zr"], (4, 4, 3)),
+    ]
+    for pot in potentials:
+        print(f"VACANCY: {pot.id}")
+        for sname, base_atoms, rep in vacancy_targets:
+            try:
+                perfect = replicated(base_atoms, rep)
+                perfect_thermo = run_lammps_case(
+                    lammps_exe=lammps_exe,
+                    workdir=results_dir / "tmp" / pot.id / "vacancy" / sname / "perfect",
+                    structure=perfect,
+                    potential=pot,
+                    run_name=f"{pot.id}_{sname}_vac_perfect",
+                    mode="minimize",
+                    timestep_fs=args.timestep_fs,
+                    md_steps=0,
+                    thermo_every=1,
+                    seed=args.seed,
+                )
+                defect = make_vacancy_structure(perfect, atom_index=args.vacancy_atom_index)
+                defect_thermo = run_lammps_case(
+                    lammps_exe=lammps_exe,
+                    workdir=results_dir / "tmp" / pot.id / "vacancy" / sname / "defect",
+                    structure=defect,
+                    potential=pot,
+                    run_name=f"{pot.id}_{sname}_vac_defect",
+                    mode="minimize",
+                    timestep_fs=args.timestep_fs,
+                    md_steps=0,
+                    thermo_every=1,
+                    seed=args.seed,
+                )
+                n_perfect = len(perfect)
+                e_perfect = float(perfect_thermo["energy_eV"])
+                e_defect = float(defect_thermo["energy_eV"])
+                e_form = e_defect - ((n_perfect - 1) / n_perfect) * e_perfect
+                rows.append({
+                    "pot_id": pot.id,
+                    "structure": sname,
+                    "repeat": "x".join(map(str, rep)),
+                    "n_perfect": n_perfect,
+                    "e_perfect_eV": e_perfect,
+                    "e_defect_eV": e_defect,
+                    "e_vac_form_eV": e_form,
+                    "error": "",
+                })
+            except Exception as e:
+                rows.append({
+                    "pot_id": pot.id,
+                    "structure": sname,
+                    "repeat": "x".join(map(str, rep)),
+                    "n_perfect": "",
+                    "e_perfect_eV": "",
+                    "e_defect_eV": "",
+                    "e_vac_form_eV": "",
+                    "error": str(e),
+                })
+    append_rows(results_dir / "vacancy_formation.csv", rows)
+
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Direct LAMMPS validation without pyiron")
     p.add_argument("--mode", choices=["dev", "prod"], default="prod")
@@ -481,6 +572,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--smoke-thermo", type=int, default=20)
     p.add_argument("--smoke-rep", default="4,4,4")
     p.add_argument("--eos-points", type=int, default=7)
+    p.add_argument("--vacancy-atom-index", type=int, default=0)
     p.add_argument("--eos-min-scale", type=float, default=0.96)
     p.add_argument("--eos-max-scale", type=float, default=1.04)
     p.add_argument("--mace_a_file", default=DEFAULT_MACE_FILES["MACE_A"])
