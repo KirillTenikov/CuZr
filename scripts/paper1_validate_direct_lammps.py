@@ -33,10 +33,10 @@ from ase.io import write
 from ase.data import atomic_masses, atomic_numbers
 
 DEFAULT_MACE_FILES = {
-    "MACE_A": "CuZr_MACE_A_compiled.model-lammps.pt",
-    "MACE_B": "CuZr_MACE_B_compiled.model-lammps.pt",
-    "MACE_C": "CuZr_MACE_C_compiled.model-lammps.pt",
-    "MACE_D": "CuZr_MACE_D_compiled.model-lammps.pt",
+    "MACE_A": "models/raw/mace_A.model-mliap_lammps.pt",
+    "MACE_B": "models/raw/mace_B.model-mliap_lammps.pt",
+    "MACE_C": "models/raw/mace_C.model-mliap_lammps.pt",
+    "MACE_D": "models/raw/mace_D.model-mliap_lammps.pt",
 }
 DEFAULT_ACE_FILES = {
     "ACE_514": "",
@@ -93,8 +93,8 @@ def make_mace_spec(id_: str, model_file: str, elements: Tuple[str, str] = ("Cu",
         id=id_,
         family="MACE",
         model_file=model_file,
-        pair_style="mace",
-        pair_coeff=f"* * {model_file} {' '.join(elements)}",
+        pair_style=f"mliap unified {model_file} 0",
+        pair_coeff=f"* * {' '.join(elements)}",
     )
 
 
@@ -127,21 +127,23 @@ def ensure_path_exists(path_str: str) -> str:
 
 def build_potentials(args: argparse.Namespace) -> List[PotentialSpec]:
     pots: List[PotentialSpec] = []
-    for pid, default in DEFAULT_MACE_FILES.items():
-        raw = getattr(args, f"{pid.lower()}_file")
-        resolved = maybe_resolve_model_path(raw) or default
-        if Path(str(resolved)).exists():
-            pots.append(make_mace_spec(pid, ensure_path_exists(str(resolved))))
+    if not args.skip_mace:
+        for pid, default in DEFAULT_MACE_FILES.items():
+            raw = getattr(args, f"{pid.lower()}_file")
+            resolved = maybe_resolve_model_path(raw) or default
+            if Path(str(resolved)).exists():
+                pots.append(make_mace_spec(pid, ensure_path_exists(str(resolved))))
     if not args.skip_eam:
         eam_2019 = maybe_resolve_model_path(args.eam_2019_file) or DEFAULT_EAM_FILES["EAM_Mendelev_2019_CuZr"]
         eam_2007 = maybe_resolve_model_path(args.eam_2007_file) or DEFAULT_EAM_FILES["2007_Mendelev-M-I_Cu-Zr_LAMMPS_ipr1"]
         pots.append(make_eam_spec("EAM_Mendelev_2019_CuZr", ensure_path_exists(str(eam_2019))))
         pots.append(make_eam_spec("2007_Mendelev-M-I_Cu-Zr_LAMMPS_ipr1", ensure_path_exists(str(eam_2007))))
-    for pid, default in DEFAULT_ACE_FILES.items():
-        raw = getattr(args, f"{pid.lower()}_file")
-        resolved = maybe_resolve_model_path(raw) or default
-        if resolved and Path(str(resolved)).exists():
-            pots.append(make_ace_spec(pid, ensure_path_exists(str(resolved))))
+    if not args.skip_ace:
+        for pid, default in DEFAULT_ACE_FILES.items():
+            raw = getattr(args, f"{pid.lower()}_file")
+            resolved = maybe_resolve_model_path(raw) or default
+            if resolved and Path(str(resolved)).exists():
+                pots.append(make_ace_spec(pid, ensure_path_exists(str(resolved))))
     return pots
 
 
@@ -232,9 +234,13 @@ def unique_species_in_order(atoms: Atoms) -> List[str]:
 
 
 def pair_coeff_for_structure(potential: PotentialSpec, atoms: Atoms) -> str:
+    species_order = unique_species_order(atoms)
     if potential.family == "EAM":
-        elems = unique_species_in_order(atoms)
-        return f"* * {potential.model_file} " + " ".join(elems)
+        return f"* * {potential.model_file} {' '.join(species_order)}"
+    if potential.family == "ACE":
+        return f"* * {potential.model_file} {' '.join(species_order)}"
+    if potential.family == "MACE":
+        return f"* * {' '.join(species_order)}"
     return potential.pair_coeff
 
 
@@ -569,6 +575,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--results-dir", default="outputs/paper1_validation_direct")
     p.add_argument("--lammps-exe", default=os.environ.get("LAMMPS_EXE", ""))
     p.add_argument("--pots", default="all")
+    p.add_argument("--skip-mace", action="store_true")
+    p.add_argument("--skip-ace", action="store_true")
     p.add_argument("--skip-eam", action="store_true")
     p.add_argument("--skip-smoke", action="store_true")
     p.add_argument("--skip-eos", action="store_true")
