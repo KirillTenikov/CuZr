@@ -589,6 +589,185 @@ def run_vacancy(
                 })
     append_rows(results_dir / "vacancy_formation.csv", rows)
 
+
+def read_csv_rows(csv_path: Path) -> List[Dict[str, str]]:
+    if not csv_path.exists():
+        return []
+    with csv_path.open() as f:
+        return list(csv.DictReader(f))
+
+
+def write_rows(csv_path: Path, rows: Sequence[Dict[str, object]]) -> None:
+    csv_path.parent.mkdir(parents=True, exist_ok=True)
+    rows = list(rows)
+    if not rows:
+        with csv_path.open("w", newline="") as f:
+            f.write("")
+        return
+    fieldnames: List[str] = []
+    for row in rows:
+        for k in row.keys():
+            if k not in fieldnames:
+                fieldnames.append(k)
+    with csv_path.open("w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def maybe_float(x: object) -> float:
+    if x is None:
+        return float("nan")
+    s = str(x).strip()
+    if not s:
+        return float("nan")
+    try:
+        return float(s)
+    except Exception:
+        return float("nan")
+
+
+def dedupe_rows(rows: Sequence[Dict[str, str]], key_fields: Sequence[str]) -> List[Dict[str, str]]:
+    latest: Dict[Tuple[str, ...], Dict[str, str]] = {}
+    for row in rows:
+        key = tuple(str(row.get(k, "")) for k in key_fields)
+        latest[key] = row
+    return list(latest.values())
+
+
+def estimate_bulk_modulus_from_eos_rows(
+    eos_rows: Sequence[Dict[str, str]],
+) -> List[Dict[str, object]]:
+    eos_rows = dedupe_rows(eos_rows, ["pot_id", "structure", "scale"])
+    grouped: Dict[Tuple[str, str], List[Dict[str, str]]] = {}
+    for row in eos_rows:
+        if str(row.get("error", "")).strip():
+            continue
+        pot_id = str(row.get("pot_id", "")).strip()
+        structure = str(row.get("structure", "")).strip()
+        if not pot_id or not structure:
+            continue
+        grouped.setdefault((pot_id, structure), []).append(row)
+
+    out_rows: List[Dict[str, object]] = []
+    for (pot_id, structure), rows in sorted(grouped.items()):
+        pts = []
+        for row in rows:
+            v = maybe_float(row.get("volume_A3", ""))
+            e = maybe_float(row.get("energy_eV", ""))
+            if np.isfinite(v) and np.isfinite(e):
+                pts.append((v, e))
+        if len(pts) < 3:
+            out_rows.append({
+                "pot_id": pot_id,
+                "structure": structure,
+                "fit_points": len(pts),
+                "v0_A3": "",
+                "e0_eV": "",
+                "bulk_modulus_GPa": "",
+                "error": "Not enough EOS points for quadratic fit",
+            })
+            continue
+
+        pts.sort(key=lambda x: x[0])
+        V = np.array([p[0] for p in pts], dtype=float)
+        E = np.array([p[1] for p in pts], dtype=float)
+
+        imin = int(np.argmin(E))
+        lo = max(0, imin - 2)
+        hi = min(len(V), imin + 3)
+        if hi - lo < 3:
+            lo = max(0, len(V) - 3)
+            hi = len(V)
+        Vfit = V[lo:hi]
+        Efit = E[lo:hi]
+
+        try:
+            a, b, c = np.polyfit(Vfit, Efit, 2)
+            if abs(a) < 1e-14:
+                raise ValueError("Quadratic coefficient too small")
+            v0 = -b / (2.0 * a)
+            e0 = a * v0 * v0 + b * v0 + c
+            bulk_gpa = v0 * (2.0 * a) * 160.21766208
+            out_rows.append({
+                "pot_id": pot_id,
+                "structure": structure,
+                "fit_points": len(Vfit),
+                "v0_A3": float(v0),
+                "e0_eV": float(e0),
+                "bulk_modulus_GPa": float(bulk_gpa),
+                "error": "",
+            })
+        except Exception as e:
+            out_rows.append({
+                "pot_id": pot_id,
+                "structure": structure,
+                "fit_points": len(Vfit),
+                "v0_A3": "",
+                "e0_eV": "",
+                "bulk_modulus_GPa": "",
+                "error": str(e),
+            })
+
+    return out_rows
+
+
+def generate_summary_outputs(results_dir: Path) -> None:
+    smoke_rows = dedupe_rows(read_csv_rows(results_dir / "smoke_validation.csv"), ["pot_id", "block", "structure"])
+    eos_rows = dedupe_rows(read_csv_rows(results_dir / "eos_validation.csv"), ["pot_id", "structure", "scale"])
+    vac_rows = dedupe_rows(read_csv_rows(results_dir / "vacancy_formation.csv"), ["pot_id", "structure", "repeat"])
+
+    bulk_rows = estimate_bulk_modulus_from_eos_rows(eos_rows) if eos_rows else []
+    if bulk_rows:
+        write_rows(results_dir / "bulk_modulus_estimates.csv", bulk_rows)
+
+    smoke_map: Dict[Tuple[str, str], Dict[str, str]] = {
+        (str(r.get("pot_id", "")), str(r.get("block", ""))): r
+        for r in smoke_rows
+        if str(r.get("structure", "")) == "B2_CuZr"
+    }
+    bulk_map: Dict[Tuple[str, str], Dict[str, object]] = {
+        (str(r.get("pot_id", "")), str(r.get("structure", ""))): r for r in bulk_rows
+    }
+    vac_map: Dict[Tuple[str, str], Dict[str, str]] = {
+        (str(r.get("pot_id", "")), str(r.get("structure", ""))): r for r in vac_rows
+    }
+
+    pot_ids = sorted({
+        *(str(r.get("pot_id", "")) for r in smoke_rows),
+        *(str(r.get("pot_id", "")) for r in eos_rows),
+        *(str(r.get("pot_id", "")) for r in vac_rows),
+    })
+
+    summary_rows: List[Dict[str, object]] = []
+    for pot_id in pot_ids:
+        row: Dict[str, object] = {"pot_id": pot_id}
+
+        s_static = smoke_map.get((pot_id, "smoke_static"), {})
+        s_md = smoke_map.get((pot_id, "smoke_md"), {})
+        row["smoke_static_B2_e_per_atom_eV"] = s_static.get("energy_per_atom_eV", "")
+        row["smoke_static_B2_error"] = s_static.get("error", "")
+        row["smoke_md_B2_e_per_atom_eV"] = s_md.get("energy_per_atom_eV", "")
+        row["smoke_md_B2_temp_K"] = s_md.get("temp_K", "")
+        row["smoke_md_B2_error"] = s_md.get("error", "")
+
+        for structure, short in [("FCC_Cu", "fcc_cu"), ("HCP_Zr", "hcp_zr"), ("B2_CuZr", "b2_cuzr")]:
+            b = bulk_map.get((pot_id, structure), {})
+            row[f"{short}_v0_A3"] = b.get("v0_A3", "")
+            row[f"{short}_e0_eV"] = b.get("e0_eV", "")
+            row[f"{short}_bulk_modulus_GPa"] = b.get("bulk_modulus_GPa", "")
+            row[f"{short}_bulk_error"] = b.get("error", "")
+
+        for structure, short in [("FCC_Cu", "fcc_cu"), ("HCP_Zr", "hcp_zr")]:
+            v = vac_map.get((pot_id, structure), {})
+            row[f"{short}_vac_eV"] = v.get("e_vac_form_eV", "")
+            row[f"{short}_vac_error"] = v.get("error", "")
+
+        summary_rows.append(row)
+
+    if summary_rows:
+        write_rows(results_dir / "paper1_validation_summary.csv", summary_rows)
+
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Direct LAMMPS validation without pyiron")
     p.add_argument("--mode", choices=["dev", "prod"], default="prod")
@@ -653,6 +832,8 @@ def main() -> int:
 
     if not args.skip_vacancy:
         run_vacancy(args, lammps_exe, pots, results_dir)
+
+    generate_summary_outputs(results_dir)
 
     print("\nDone.")
     print(f"results dir: {results_dir}")
