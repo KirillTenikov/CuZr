@@ -1,27 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# startup_md_lammps_with_potentials.sh
+# startup_md_lammps.sh
 #
-# Plan C runtime script:
-#   1) verify baked Python env
-#   2) build/install LAMMPS if needed
-#   3) download ACE/MACE potentials
-#   4) convert MACE models to LAMMPS-ready form
-#   5) write convenient runtime env files and canonical paths
-#
-# Assumes the Docker image already contains:
-#   - /opt/cuzr-mamba Python env with pyiron + torch + MACE stack
-#   - /opt/lammps source tree already unpacked
+# Runtime bootstrap for CuZr validation on a fresh instance:
+# 1) verify baked Python env
+# 2) build/install LAMMPS if needed
+# 3) download ACE / MACE / EAM potentials
+# 4) convert raw MACE models to ML-IAP format
+# 5) prepare canonical directories and convenient env files
 
-log() {
-  echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"
-}
-
-die() {
-  echo "ERROR: $*" >&2
-  exit 1
-}
+log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
+die() { echo "ERROR: $*" >&2; exit 1; }
 
 download_if_missing() {
   local url="$1"
@@ -52,7 +42,14 @@ find_new_pt_after_conversion() {
     d="$(dirname "$src")"
     b="$(basename "$src")"
     stem="${b%.model}"
-    for cand in       "${src}-mliap_lammps.pt"       "${src}-lammps.pt"       "${d}/${b}-mliap_lammps.pt"       "${d}/${b}-lammps.pt"       "${d}/${stem}-mliap_lammps.pt"       "${d}/${stem}-lammps.pt"; do
+    for cand in \
+      "${src}-mliap_lammps.pt" \
+      "${src}-lammps.pt" \
+      "${d}/${b}-mliap_lammps.pt" \
+      "${d}/${b}-lammps.pt" \
+      "${d}/${stem}-mliap_lammps.pt" \
+      "${d}/${stem}-lammps.pt"
+    do
       if [[ -f "$cand" ]]; then
         new_file="$cand"
         break
@@ -68,13 +65,13 @@ find_new_pt_after_conversion() {
   echo "$new_file"
 }
 
-compile_mace_model() {
+convert_mace_to_mliap() {
   local label="$1"
   local raw_src="$2"
   local final_dst="$3"
 
   if [[ -s "$final_dst" ]]; then
-    log "Compiled MACE already present: $final_dst"
+    log "Converted MACE already present: $final_dst"
     return 0
   fi
 
@@ -86,21 +83,21 @@ compile_mace_model() {
 
   find "$(dirname "$raw_src")" -maxdepth 1 -type f -name "*.pt" | sort > "$before_file"
 
-  log "Converting $label from $raw_src"
+  log "Converting ${label} to ML-IAP: ${raw_src}"
   "${PYTHON_BIN}" -m mace.cli.create_lammps_model "$raw_src" --format=mliap
 
   new_pt="$(find_new_pt_after_conversion "$raw_src" "$before_file" "$after_file" || true)"
   rm -f "$before_file" "$after_file"
 
-  [[ -n "$new_pt" ]] || die "Could not find converted .pt output for $raw_src"
+  [[ -n "$new_pt" ]] || die "Could not find converted ML-IAP .pt for $raw_src"
 
   mkdir -p "$(dirname "$final_dst")"
   if [[ "$new_pt" != "$final_dst" ]]; then
     mv -f "$new_pt" "$final_dst"
   fi
+  [[ -s "$final_dst" ]] || die "Converted ML-IAP model missing after move: $final_dst"
 
-  [[ -s "$final_dst" ]] || die "Converted model missing after move: $final_dst"
-  log "Prepared $label -> $final_dst"
+  log "Prepared ${label} -> ${final_dst}"
 }
 
 WORKSPACE_DIR="${WORKSPACE_DIR:-/workspace}"
@@ -110,7 +107,6 @@ REPO_BRANCH="${REPO_BRANCH:-master}"
 
 CUZR_ENV_PREFIX="${CUZR_ENV_PREFIX:-/opt/cuzr-mamba}"
 PYTHON_BIN="${PYTHON_BIN:-${CUZR_ENV_PREFIX}/bin/python}"
-PIP_BIN="${PIP_BIN:-${CUZR_ENV_PREFIX}/bin/pip}"
 
 LAMMPS_SRC_DIR="${LAMMPS_SRC_DIR:-/opt/lammps}"
 LAMMPS_BUILD_DIR="${LAMMPS_BUILD_DIR:-/opt/lammps/build}"
@@ -119,11 +115,15 @@ BUILD_JOBS="${BUILD_JOBS:-4}"
 GPU_ARCH_FLAG="${GPU_ARCH_FLAG:--DKokkos_ARCH_AMPERE80=ON}"
 
 MODEL_BASE_URL="${MODEL_BASE_URL:-https://github.com/KirillTenikov/CuZr/releases/download/dataset-v1}"
+
 RAW_DIR="${RAW_DIR:-${WORKSPACE_DIR}/models/raw}"
+RAW_EAM_DIR="${RAW_EAM_DIR:-${RAW_DIR}/eam}"
 CONVERTED_DIR="${CONVERTED_DIR:-${WORKSPACE_DIR}/models/converted}"
+
 POTENTIALS_DIR="${POTENTIALS_DIR:-${WORKSPACE_DIR}/potentials}"
 POTENTIALS_MACE_DIR="${POTENTIALS_MACE_DIR:-${POTENTIALS_DIR}/mace}"
 POTENTIALS_ACE_DIR="${POTENTIALS_ACE_DIR:-${POTENTIALS_DIR}/ace}"
+POTENTIALS_EAM_DIR="${POTENTIALS_EAM_DIR:-${POTENTIALS_DIR}/eam}"
 
 MACE_A_NAME="${MACE_A_NAME:-mace_A.model}"
 MACE_B_NAME="${MACE_B_NAME:-mace_B.model}"
@@ -131,6 +131,7 @@ MACE_C_NAME="${MACE_C_NAME:-mace_C.model}"
 MACE_D_NAME="${MACE_D_NAME:-mace_D.model}"
 ACE_514_NAME="${ACE_514_NAME:-ace_514.yaml}"
 ACE_1352_NAME="${ACE_1352_NAME:-ace_1352.yaml}"
+EAM_2019_NAME="${EAM_2019_NAME:-Cu-Zr_4.eam.fs}"
 
 MACE_A_RAW="${RAW_DIR}/${MACE_A_NAME}"
 MACE_B_RAW="${RAW_DIR}/${MACE_B_NAME}"
@@ -138,11 +139,15 @@ MACE_C_RAW="${RAW_DIR}/${MACE_C_NAME}"
 MACE_D_RAW="${RAW_DIR}/${MACE_D_NAME}"
 ACE_514_RAW="${RAW_DIR}/${ACE_514_NAME}"
 ACE_1352_RAW="${RAW_DIR}/${ACE_1352_NAME}"
+EAM_2019_RAW="${RAW_EAM_DIR}/${EAM_2019_NAME}"
 
-MACE_A_COMPILED="${CONVERTED_DIR}/CuZr_MACE_A_compiled.model-lammps.pt"
-MACE_B_COMPILED="${CONVERTED_DIR}/CuZr_MACE_B_compiled.model-lammps.pt"
-MACE_C_COMPILED="${CONVERTED_DIR}/CuZr_MACE_C_compiled.model-lammps.pt"
-MACE_D_COMPILED="${CONVERTED_DIR}/CuZr_MACE_D_compiled.model-lammps.pt"
+MACE_A_MLIAP="${RAW_DIR}/mace_A.model-mliap_lammps.pt"
+MACE_B_MLIAP="${RAW_DIR}/mace_B.model-mliap_lammps.pt"
+MACE_C_MLIAP="${RAW_DIR}/mace_C.model-mliap_lammps.pt"
+MACE_D_MLIAP="${RAW_DIR}/mace_D.model-mliap_lammps.pt"
+
+EAM_2007_SYSTEM="${EAM_2007_SYSTEM:-${LAMMPS_INSTALL_DIR}/share/lammps/potentials/CuZr_mm.eam.fs}"
+EAM_2007_RAW="${RAW_EAM_DIR}/CuZr_mm.eam.fs"
 
 POTENTIAL_PATHS_ENV="${POTENTIALS_DIR}/potential_paths.env"
 PYTHON_ENV_FILE="${WORKSPACE_DIR}/cuzr_python.env"
@@ -162,16 +167,15 @@ import numpy
 import torch
 import Cython
 import ase
-
+import mace
 print("NumPy:", numpy.__version__)
 print("Torch:", torch.__version__)
 print("CUDA available:", torch.cuda.is_available())
 print("CUDA version:", torch.version.cuda)
 print("Cython:", Cython.__version__)
 print("ASE:", ase.__version__)
+print("MACE:", mace.__file__)
 print("cythonize:", shutil.which("cythonize"))
-
-assert numpy.__version__ == "1.26.4", numpy.__version__
 assert shutil.which("cythonize"), "cythonize not found"
 PY
 
@@ -229,25 +233,8 @@ fi
 export PATH="${CUZR_ENV_PREFIX}/bin:${LAMMPS_INSTALL_DIR}/bin:${PATH}"
 export LD_LIBRARY_PATH="${CUZR_ENV_PREFIX}/lib:${LAMMPS_INSTALL_DIR}/lib:${LD_LIBRARY_PATH:-}"
 
-mkdir -p "$(dirname "${PYTHON_ENV_FILE}")"
-cat > "${PYTHON_ENV_FILE}" <<EOF
-export CUZR_ENV_PREFIX="${CUZR_ENV_PREFIX}"
-export PYTHON_BIN="${PYTHON_BIN}"
-export PIP_BIN="${PIP_BIN}"
-export PATH="${CUZR_ENV_PREFIX}/bin:${LAMMPS_INSTALL_DIR}/bin:\$PATH"
-export LD_LIBRARY_PATH="${CUZR_ENV_PREFIX}/lib:${LAMMPS_INSTALL_DIR}/lib:\$LD_LIBRARY_PATH"
-EOF
-
-cat > /etc/profile.d/cuzr-lammps.sh <<EOF
-export CUZR_ENV_PREFIX="${CUZR_ENV_PREFIX}"
-export PYTHON_BIN="${PYTHON_BIN}"
-export PIP_BIN="${PIP_BIN}"
-export PATH="${CUZR_ENV_PREFIX}/bin:${LAMMPS_INSTALL_DIR}/bin:\$PATH"
-export LD_LIBRARY_PATH="${CUZR_ENV_PREFIX}/lib:${LAMMPS_INSTALL_DIR}/lib:\$LD_LIBRARY_PATH"
-EOF
-
-log "Downloading raw ACE/MACE potentials"
-mkdir -p "${RAW_DIR}" "${CONVERTED_DIR}" "${POTENTIALS_MACE_DIR}" "${POTENTIALS_ACE_DIR}" "${REPO_DIR}"
+mkdir -p "${RAW_DIR}" "${RAW_EAM_DIR}" "${CONVERTED_DIR}" \
+         "${POTENTIALS_MACE_DIR}" "${POTENTIALS_ACE_DIR}" "${POTENTIALS_EAM_DIR}"
 
 download_if_missing "${MODEL_BASE_URL}/${MACE_A_NAME}" "${MACE_A_RAW}"
 download_if_missing "${MODEL_BASE_URL}/${MACE_B_NAME}" "${MACE_B_RAW}"
@@ -255,71 +242,70 @@ download_if_missing "${MODEL_BASE_URL}/${MACE_C_NAME}" "${MACE_C_RAW}"
 download_if_missing "${MODEL_BASE_URL}/${MACE_D_NAME}" "${MACE_D_RAW}"
 download_if_missing "${MODEL_BASE_URL}/${ACE_514_NAME}" "${ACE_514_RAW}"
 download_if_missing "${MODEL_BASE_URL}/${ACE_1352_NAME}" "${ACE_1352_RAW}"
+download_if_missing "${MODEL_BASE_URL}/${EAM_2019_NAME}" "${EAM_2019_RAW}"
 
-log "Converting MACE models for LAMMPS"
-compile_mace_model "MACE_A" "${MACE_A_RAW}" "${MACE_A_COMPILED}"
-compile_mace_model "MACE_B" "${MACE_B_RAW}" "${MACE_B_COMPILED}"
-compile_mace_model "MACE_C" "${MACE_C_RAW}" "${MACE_C_COMPILED}"
-compile_mace_model "MACE_D" "${MACE_D_RAW}" "${MACE_D_COMPILED}"
+[[ -f "${EAM_2007_SYSTEM}" ]] || die "Default 2007 EAM not found in LAMMPS install: ${EAM_2007_SYSTEM}"
+cp -f "${EAM_2007_SYSTEM}" "${EAM_2007_RAW}"
 
-log "Creating canonical potential paths"
-ln -sfn "${MACE_A_COMPILED}" "${POTENTIALS_MACE_DIR}/CuZr_MACE_A_compiled.model-lammps.pt"
-ln -sfn "${MACE_B_COMPILED}" "${POTENTIALS_MACE_DIR}/CuZr_MACE_B_compiled.model-lammps.pt"
-ln -sfn "${MACE_C_COMPILED}" "${POTENTIALS_MACE_DIR}/CuZr_MACE_C_compiled.model-lammps.pt"
-ln -sfn "${MACE_D_COMPILED}" "${POTENTIALS_MACE_DIR}/CuZr_MACE_D_compiled.model-lammps.pt"
+convert_mace_to_mliap "MACE_A" "${MACE_A_RAW}" "${MACE_A_MLIAP}"
+convert_mace_to_mliap "MACE_B" "${MACE_B_RAW}" "${MACE_B_MLIAP}"
+convert_mace_to_mliap "MACE_C" "${MACE_C_RAW}" "${MACE_C_MLIAP}"
+convert_mace_to_mliap "MACE_D" "${MACE_D_RAW}" "${MACE_D_MLIAP}"
+
+ln -sfn "${MACE_A_MLIAP}" "${POTENTIALS_MACE_DIR}/mace_A.model-mliap_lammps.pt"
+ln -sfn "${MACE_B_MLIAP}" "${POTENTIALS_MACE_DIR}/mace_B.model-mliap_lammps.pt"
+ln -sfn "${MACE_C_MLIAP}" "${POTENTIALS_MACE_DIR}/mace_C.model-mliap_lammps.pt"
+ln -sfn "${MACE_D_MLIAP}" "${POTENTIALS_MACE_DIR}/mace_D.model-mliap_lammps.pt"
 
 ln -sfn "${ACE_514_RAW}" "${POTENTIALS_ACE_DIR}/ace_514.yaml"
 ln -sfn "${ACE_1352_RAW}" "${POTENTIALS_ACE_DIR}/ace_1352.yaml"
 
-ln -sfn "${MACE_A_COMPILED}" "${REPO_DIR}/CuZr_MACE_A_compiled.model-lammps.pt"
-ln -sfn "${MACE_B_COMPILED}" "${REPO_DIR}/CuZr_MACE_B_compiled.model-lammps.pt"
-ln -sfn "${MACE_C_COMPILED}" "${REPO_DIR}/CuZr_MACE_C_compiled.model-lammps.pt"
-ln -sfn "${MACE_D_COMPILED}" "${REPO_DIR}/CuZr_MACE_D_compiled.model-lammps.pt"
-ln -sfn "${ACE_514_RAW}" "${REPO_DIR}/ace_514.yaml"
-ln -sfn "${ACE_1352_RAW}" "${REPO_DIR}/ace_1352.yaml"
+ln -sfn "${EAM_2019_RAW}" "${POTENTIALS_EAM_DIR}/Cu-Zr_4.eam.fs"
+ln -sfn "${EAM_2007_RAW}" "${POTENTIALS_EAM_DIR}/CuZr_mm.eam.fs"
 
 cat > "${POTENTIAL_PATHS_ENV}" <<EOF
-export CUZR_ACE_514_FILE="${POTENTIALS_ACE_DIR}/ace_514.yaml"
-export CUZR_ACE_1352_FILE="${POTENTIALS_ACE_DIR}/ace_1352.yaml"
-export CUZR_MACE_A_FILE="${POTENTIALS_MACE_DIR}/CuZr_MACE_A_compiled.model-lammps.pt"
-export CUZR_MACE_B_FILE="${POTENTIALS_MACE_DIR}/CuZr_MACE_B_compiled.model-lammps.pt"
-export CUZR_MACE_C_FILE="${POTENTIALS_MACE_DIR}/CuZr_MACE_C_compiled.model-lammps.pt"
-export CUZR_MACE_D_FILE="${POTENTIALS_MACE_DIR}/CuZr_MACE_D_compiled.model-lammps.pt"
+export CUZR_MODELS_RAW="${RAW_DIR}"
+export CUZR_MODELS_CONVERTED="${CONVERTED_DIR}"
+export CUZR_POTENTIALS_DIR="${POTENTIALS_DIR}"
+
+export EAM_2019_FILE="${EAM_2019_RAW}"
+export EAM_2007_FILE="${EAM_2007_RAW}"
+
+export MACE_A_RAW="${MACE_A_RAW}"
+export MACE_B_RAW="${MACE_B_RAW}"
+export MACE_C_RAW="${MACE_C_RAW}"
+export MACE_D_RAW="${MACE_D_RAW}"
+
+export MACE_A_MLIAP="${MACE_A_MLIAP}"
+export MACE_B_MLIAP="${MACE_B_MLIAP}"
+export MACE_C_MLIAP="${MACE_C_MLIAP}"
+export MACE_D_MLIAP="${MACE_D_MLIAP}"
+
+export ACE_514_FILE="${ACE_514_RAW}"
+export ACE_1352_FILE="${ACE_1352_RAW}"
+EOF
+
+cat > "${PYTHON_ENV_FILE}" <<EOF
+export PATH="${CUZR_ENV_PREFIX}/bin:${PATH}"
+export LD_LIBRARY_PATH="${CUZR_ENV_PREFIX}/lib:${LAMMPS_INSTALL_DIR}/lib:\${LD_LIBRARY_PATH:-}"
+export PYTHONPATH="${LAMMPS_INSTALL_DIR}/lib/python3.11/site-packages:\${PYTHONPATH:-}"
 EOF
 
 cat > "${RUNTIME_ENV_FILE}" <<EOF
-export CUZR_ENV_PREFIX="${CUZR_ENV_PREFIX}"
-export PYTHON_BIN="${PYTHON_BIN}"
-export PIP_BIN="${PIP_BIN}"
-export PATH="${CUZR_ENV_PREFIX}/bin:${LAMMPS_INSTALL_DIR}/bin:\$PATH"
-export LD_LIBRARY_PATH="${CUZR_ENV_PREFIX}/lib:${LAMMPS_INSTALL_DIR}/lib:\$LD_LIBRARY_PATH"
-export CUZR_ACE_514_FILE="${POTENTIALS_ACE_DIR}/ace_514.yaml"
-export CUZR_ACE_1352_FILE="${POTENTIALS_ACE_DIR}/ace_1352.yaml"
-export CUZR_MACE_A_FILE="${POTENTIALS_MACE_DIR}/CuZr_MACE_A_compiled.model-lammps.pt"
-export CUZR_MACE_B_FILE="${POTENTIALS_MACE_DIR}/CuZr_MACE_B_compiled.model-lammps.pt"
-export CUZR_MACE_C_FILE="${POTENTIALS_MACE_DIR}/CuZr_MACE_C_compiled.model-lammps.pt"
-export CUZR_MACE_D_FILE="${POTENTIALS_MACE_DIR}/CuZr_MACE_D_compiled.model-lammps.pt"
+export PATH="${CUZR_ENV_PREFIX}/bin:${LAMMPS_INSTALL_DIR}/bin:${PATH}"
+export LD_LIBRARY_PATH="${CUZR_ENV_PREFIX}/lib:${LAMMPS_INSTALL_DIR}/lib:\${LD_LIBRARY_PATH:-}"
+export PYTHONPATH="${LAMMPS_INSTALL_DIR}/lib/python3.11/site-packages:\${PYTHONPATH:-}"
+source "${POTENTIAL_PATHS_ENV}"
 EOF
 
-cat >> "${PYTHON_ENV_FILE}" <<EOF
-export CUZR_ACE_514_FILE="${POTENTIALS_ACE_DIR}/ace_514.yaml"
-export CUZR_ACE_1352_FILE="${POTENTIALS_ACE_DIR}/ace_1352.yaml"
-export CUZR_MACE_A_FILE="${POTENTIALS_MACE_DIR}/CuZr_MACE_A_compiled.model-lammps.pt"
-export CUZR_MACE_B_FILE="${POTENTIALS_MACE_DIR}/CuZr_MACE_B_compiled.model-lammps.pt"
-export CUZR_MACE_C_FILE="${POTENTIALS_MACE_DIR}/CuZr_MACE_C_compiled.model-lammps.pt"
-export CUZR_MACE_D_FILE="${POTENTIALS_MACE_DIR}/CuZr_MACE_D_compiled.model-lammps.pt"
-EOF
-
-log "Final verification"
-which lmp
-lmp -h | head -n 20 || true
-"${PYTHON_BIN}" -c "import lammps; print(lammps.__file__)"
-
-log "Prepared compiled models:"
-ls -lh "${POTENTIALS_MACE_DIR}" || true
+log "Prepared MACE ML-IAP models:"
+ls -lh "${RAW_DIR}"/*mliap_lammps.pt 2>/dev/null || true
 
 log "Prepared ACE files:"
-ls -lh "${POTENTIALS_ACE_DIR}" || true
+ls -lh "${RAW_DIR}"/*.yaml 2>/dev/null || true
 
-log "Done. Source this file next time:"
+log "Prepared EAM files:"
+ls -lh "${RAW_EAM_DIR}"/*.eam.fs 2>/dev/null || true
+
+log "Done. Source this next time:"
 echo "  source ${RUNTIME_ENV_FILE}"
