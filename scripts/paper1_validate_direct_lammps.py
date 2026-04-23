@@ -880,7 +880,7 @@ def run_glass_plus(
                 print(f"GLASS_PLUS: {pot.id} / {comp} / seed {actual_seed}")
                 case_dir = results_dir / 'tmp' / pot.id / 'glass_plus' / comp / f'seed_{actual_seed}'
                 try:
-                    atoms0 = build_glass_seed(comp, args.glass_rep, actual_seed)
+                    atoms0 = build_glass_seed(comp, args.glass_plus_rep, actual_seed)
                     thermo, dump_file, type_to_symbol = run_glass_plus_case(
                         args, lammps_exe, case_dir, atoms0, pot, f"{pot.id}_{comp}_glass_plus_seed{actual_seed}", actual_seed
                     )
@@ -1331,6 +1331,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--eos-min-scale", type=float, default=0.96)
     p.add_argument("--eos-max-scale", type=float, default=1.04)
     p.add_argument("--glass-rep", default="5,5,5")
+    p.add_argument("--glass-plus-rep", default="8,8,8")
     p.add_argument("--glass-compositions", default="Cu64Zr36,Cu50Zr50,Cu36Zr64")
     p.add_argument("--glass-temp-high", type=float, default=2000.0)
     p.add_argument("--glass-temp-low", type=float, default=300.0)
@@ -1363,6 +1364,9 @@ def parse_args() -> argparse.Namespace:
     args.glass_rep = tuple(int(x) for x in str(args.glass_rep).split(","))
     if len(args.glass_rep) != 3:
         raise ValueError("--glass-rep must have exactly three integers")
+    args.glass_plus_rep = tuple(int(x) for x in str(args.glass_plus_rep).split(","))
+    if len(args.glass_plus_rep) != 3:
+        raise ValueError("--glass-plus-rep must have exactly three integers")
     return args
 
 
