@@ -1,0 +1,60 @@
+{
+  "potentials": [
+    {
+      "id": "MACE_A",
+      "family": "MACE",
+      "path": "${MACE_A_MLIAP}",
+      "enabled": true,
+      "lmp_command": "lmp -k on g 1 -sf kk -pk kokkos newton on neigh half"
+    },
+    {
+      "id": "MACE_B",
+      "family": "MACE",
+      "path": "${MACE_B_MLIAP}",
+      "enabled": true,
+      "lmp_command": "lmp -k on g 1 -sf kk -pk kokkos newton on neigh half"
+    },
+    {
+      "id": "MACE_C",
+      "family": "MACE",
+      "path": "${MACE_C_MLIAP}",
+      "enabled": true,
+      "lmp_command": "lmp -k on g 1 -sf kk -pk kokkos newton on neigh half"
+    },
+    {
+      "id": "MACE_D",
+      "family": "MACE",
+      "path": "${MACE_D_MLIAP}",
+      "enabled": true,
+      "lmp_command": "lmp -k on g 1 -sf kk -pk kokkos newton on neigh half"
+    },
+    {
+      "id": "ACE_514",
+      "family": "ACE",
+      "path": "${ACE_514_FILE}",
+      "enabled": true,
+      "lmp_command": "lmp"
+    },
+    {
+      "id": "ACE_1352",
+      "family": "ACE",
+      "path": "${ACE_1352_FILE}",
+      "enabled": true,
+      "lmp_command": "lmp"
+    },
+    {
+      "id": "EAM_Mendelev_2019_CuZr",
+      "family": "EAM",
+      "path": "${EAM_2019_FILE}",
+      "enabled": true,
+      "lmp_command": "lmp"
+    },
+    {
+      "id": "2007_Mendelev-M-I_Cu-Zr_LAMMPS_ipr1",
+      "family": "EAM",
+      "path": "${EAM_2007_FILE}",
+      "enabled": true,
+      "lmp_command": "lmp"
+    }
+  ]
+}

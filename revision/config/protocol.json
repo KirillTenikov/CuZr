@@ -1,0 +1,20 @@
+{
+  "timestep_ps": 0.001,
+  "temperature_high_K": 3000.0,
+  "temperature_low_K": 300.0,
+  "pressure_bar": 0.0,
+  "melt_ps": 20.0,
+  "quench_rate_K_per_ps": 135.0,
+  "relax_npt_ps": 50.0,
+  "equilibrate_nvt_ps": 50.0,
+  "thermo_every_steps": 500,
+  "tdamp_ps": 0.1,
+  "pdamp_ps": 1.0,
+  "minimize_etol": 1e-6,
+  "minimize_ftol": 1e-8,
+  "minimize_maxiter": 4000,
+  "minimize_maxeval": 20000,
+  "tail_fraction": 0.2,
+  "nve_preequilibrate_ps": 10.0,
+  "nve_stability_ps": 50.0
+}

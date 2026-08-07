@@ -1,0 +1,4 @@
+# The preparation runner and thermo summarizer use only the Python standard library.
+# Structural RDF/coordination analysis requires:
+numpy
+ase

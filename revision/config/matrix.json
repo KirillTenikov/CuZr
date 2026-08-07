@@ -1,0 +1,19 @@
+{
+  "potentials": [
+    "MACE_A",
+    "MACE_B",
+    "MACE_C",
+    "MACE_D",
+    "ACE_514",
+    "ACE_1352",
+    "EAM_Mendelev_2019_CuZr",
+    "2007_Mendelev-M-I_Cu-Zr_LAMMPS_ipr1"
+  ],
+  "seeds": [43, 44, 45],
+  "natoms": [1024],
+  "compositions": [
+    {"id": "Cu64Zr36", "initial_density_g_cm3": 7.2},
+    {"id": "Cu50Zr50", "initial_density_g_cm3": null},
+    {"id": "Cu36Zr64", "initial_density_g_cm3": null}
+  ]
+}
