@@ -11,7 +11,6 @@ from pathlib import Path
 HERE = Path(__file__).resolve()
 REVISION_ROOT = HERE.parents[1]
 sys.path.insert(0, str(REVISION_ROOT / "src"))
-
 from paper1_revision.config import load_potentials, load_protocol
 from paper1_revision.lammps import RunSpec, execute, generate_inputs, run_spec_dict, write_shell_script
 from paper1_revision.manifest import git_info, sha256, write_json
@@ -38,6 +37,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--run-dir", type=Path)
     parser.add_argument("--initial-data", type=Path, help="Use a pre-generated shared initial.data instead of generating one.")
     parser.add_argument("--lmp-command", help="Override the command stored for the selected potential.")
+    parser.add_argument(
+        "--checkpoint-every-steps",
+        type=int,
+        default=5000,
+        help="Write periodic binary restart files during MD stages 00-02; set 0 to disable.",
+    )
     parser.add_argument("--execute", action="store_true")
     parser.add_argument("--summarize", action="store_true")
     parser.add_argument("--no-box-relax", action="store_true")
@@ -47,6 +52,9 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
+    if args.checkpoint_every_steps < 0:
+        raise SystemExit("--checkpoint-every-steps must be >= 0 (use 0 to disable periodic checkpoints).")
+
     repo_root = args.repo_root.resolve()
     protocol = load_protocol(args.protocol.resolve())
     potentials = load_potentials(args.potentials.resolve())
@@ -55,7 +63,6 @@ def main() -> None:
     potential = potentials[args.potential]
     if not potential.enabled:
         raise SystemExit(f"Potential {potential.id} is disabled in {args.potentials}; set its path and enabled=true first.")
-
     run_dir = (args.run_dir or default_run_dir(args.results_root, args.composition, args.natoms, args.seed, potential.id)).resolve()
     if run_dir.exists() and any(run_dir.iterdir()):
         raise SystemExit(
@@ -63,7 +70,6 @@ def main() -> None:
             "For safety, this workflow never overwrites an existing run. Move it, archive it, or choose --run-dir."
         )
     run_dir.mkdir(parents=True, exist_ok=True)
-
     initial_path = run_dir / "initial.data"
     if args.initial_data:
         source = args.initial_data.resolve()
@@ -73,7 +79,6 @@ def main() -> None:
         structure_meta = {"source_initial_data": str(source), "source_sha256": sha256(source)}
     else:
         structure_meta = write_initial_data(initial_path, args.natoms, args.composition, args.initial_density, args.seed)
-
     spec = RunSpec(
         composition=args.composition,
         natoms=args.natoms,
@@ -89,13 +94,14 @@ def main() -> None:
         repo_root,
         include_box_relax=not args.no_box_relax,
         include_nve=args.with_nve,
+        checkpoint_every_steps=args.checkpoint_every_steps,
     )
     lmp_command = args.lmp_command or potential.lmp_command
     shell_script = write_shell_script(run_dir, input_files, lmp_command)
     model_path = resolve_model_path(repo_root, potential.path)
-
+    checkpoint_every_ps = args.checkpoint_every_steps * protocol.timestep_ps if args.checkpoint_every_steps else None
     manifest = {
-        "workflow_version": "0.2.0",
+        "workflow_version": "0.2.1",
         "run": run_spec_dict(spec),
         "protocol": asdict(protocol),
         "derived": {
@@ -104,6 +110,8 @@ def main() -> None:
             "quench_steps": protocol.steps(protocol.quench_ps),
             "relax_npt_steps": protocol.steps(protocol.relax_npt_ps),
             "equilibrate_nvt_steps": protocol.steps(protocol.equilibrate_nvt_ps),
+            "checkpoint_every_steps": args.checkpoint_every_steps,
+            "checkpoint_every_ps": checkpoint_every_ps,
         },
         "potential": asdict(potential),
         "potential_resolved_path": str(model_path),
@@ -115,7 +123,6 @@ def main() -> None:
         "git": git_info(repo_root),
     }
     write_json(run_dir / "manifest.json", manifest)
-
     print(json.dumps({"run_dir": str(run_dir), "input_files": input_files, "shell_script": str(shell_script)}, indent=2))
     if args.execute:
         execute(run_dir, input_files, lmp_command)
