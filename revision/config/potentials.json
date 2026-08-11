@@ -47,14 +47,14 @@
       "family": "EAM",
       "path": "${EAM_2019_FILE}",
       "enabled": true,
-      "lmp_command": "lmp"
+      "lmp_command": "lmp -k on g 1 -sf kk -pk kokkos newton on neigh half"
     },
     {
       "id": "2007_Mendelev-M-I_Cu-Zr_LAMMPS_ipr1",
       "family": "EAM",
       "path": "${EAM_2007_FILE}",
       "enabled": true,
-      "lmp_command": "lmp"
+      "lmp_command": "lmp -k on g 1 -sf kk -pk kokkos newton on neigh half"
     }
   ]
 }
