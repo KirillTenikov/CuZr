@@ -115,7 +115,6 @@ def make_input(
     maxeval: int,
 ) -> str:
     deform = deformation_block(mode, strain)
-
     return f"""\
 clear
 units metal
@@ -171,7 +170,11 @@ write_data relaxed.data
 
 
 def parse_result_marker(text: str) -> dict:
-    lines = [line.strip() for line in text.splitlines() if line.startswith("ELASTIC_RESULT ")]
+    lines = [
+        line.strip()
+        for line in text.splitlines()
+        if line.startswith("ELASTIC_RESULT ")
+    ]
     if not lines:
         raise RuntimeError("No ELASTIC_RESULT marker found in LAMMPS output.")
 
@@ -184,12 +187,28 @@ def parse_result_marker(text: str) -> dict:
         raw[key] = value
 
     required = {
-        "mode", "strain", "pe", "vol", "lx", "ly", "lz",
-        "xy", "xz", "yz", "pxx", "pyy", "pzz", "pxy", "pxz", "pyz",
+        "mode",
+        "strain",
+        "pe",
+        "vol",
+        "lx",
+        "ly",
+        "lz",
+        "xy",
+        "xz",
+        "yz",
+        "pxx",
+        "pyy",
+        "pzz",
+        "pxy",
+        "pxz",
+        "pyz",
     }
     missing = required - raw.keys()
     if missing:
-        raise RuntimeError(f"Incomplete ELASTIC_RESULT marker; missing: {sorted(missing)}")
+        raise RuntimeError(
+            f"Incomplete ELASTIC_RESULT marker; missing: {sorted(missing)}"
+        )
 
     return {
         "mode": raw["mode"],
@@ -229,7 +248,7 @@ def run_job(
     result_file = job_dir / "result.json"
 
     if result_file.exists() and not force:
-        print(f"[SKIP] {job_dir} already complete")
+        print(f"[SKIP] {job_dir} already complete", flush=True)
         return
 
     existing = [p for p in job_dir.iterdir()]
@@ -242,22 +261,32 @@ def run_job(
     inp.write_text(input_text)
 
     if not execute:
-        print(f"[PREPARED] {job_dir}")
+        print(f"[PREPARED] {job_dir}", flush=True)
         return
 
     cmd = shlex.split(lmp_cmd) + ["-in", inp.name]
-    print(f"[RUN] {job_dir}")
+    print(f"[RUN] {job_dir}", flush=True)
 
+    # Stream LAMMPS output live to the terminal/tmux while preserving an exact
+    # per-job copy in stdout.txt.  LAMMPS input uses `thermo_modify flush yes`,
+    # so thermo progress is visible promptly during long minimizations.
     with stdout_file.open("w") as fh:
-        proc = subprocess.run(
+        proc = subprocess.Popen(
             cmd,
             cwd=job_dir,
-            stdout=fh,
+            stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
+            bufsize=1,
         )
+        assert proc.stdout is not None
+        for line in proc.stdout:
+            print(line, end="", flush=True)
+            fh.write(line)
+            fh.flush()
+        returncode = proc.wait()
 
-    if proc.returncode != 0:
+    if returncode != 0:
         raise RuntimeError(
             f"LAMMPS failed in {job_dir}; inspect {stdout_file}"
         )
@@ -265,17 +294,26 @@ def run_job(
     result = parse_result_marker(stdout_file.read_text())
     result["lammps_command"] = cmd
     result_file.write_text(json.dumps(result, indent=2) + "\n")
-    print(f"[OK]  {job_dir}")
+    print(f"[OK]  {job_dir}", flush=True)
 
 
 def main() -> None:
     p = argparse.ArgumentParser(
         description="Generate/execute zero-temperature relaxed-ion elasticity jobs."
     )
-    p.add_argument("--data", required=True, type=Path, help="Source relaxed LAMMPS data file.")
-    p.add_argument("--out", required=True, type=Path, help="Output root for one potential/seed.")
+    p.add_argument(
+        "--data",
+        required=True,
+        type=Path,
+        help="Source relaxed LAMMPS data file.",
+    )
+    p.add_argument(
+        "--out",
+        required=True,
+        type=Path,
+        help="Output root for one potential/seed.",
+    )
     p.add_argument("--label", required=True, help="Human-readable potential label.")
-
     p.add_argument(
         "--pair-style",
         required=True,
@@ -304,14 +342,16 @@ def main() -> None:
         choices=("bulk", "xy", "xz", "yz"),
         default=("bulk", "xy", "xz", "yz"),
     )
-
     p.add_argument("--etol", type=float, default=1.0e-12)
     p.add_argument("--ftol", type=float, default=1.0e-8)
     p.add_argument("--maxiter", type=int, default=10000)
     p.add_argument("--maxeval", type=int, default=100000)
-
     p.add_argument("--execute", action="store_true", help="Actually run LAMMPS.")
-    p.add_argument("--force", action="store_true", help="Overwrite incomplete job directories.")
+    p.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite incomplete job directories.",
+    )
     args = p.parse_args()
 
     data_file = args.data.expanduser().resolve()
@@ -319,12 +359,16 @@ def main() -> None:
         raise SystemExit(f"Input data file not found: {data_file}")
 
     if any(abs(x) < 1e-15 for x in args.strains):
-        raise SystemExit("--strains should contain only non-zero values; reference strain is added automatically.")
+        raise SystemExit(
+            "--strains should contain only non-zero values; reference strain is added automatically."
+        )
 
     positives = sorted(x for x in args.strains if x > 0)
     negatives = sorted(-x for x in args.strains if x < 0)
     if positives != negatives:
-        raise SystemExit("Use symmetric +/- strain amplitudes, e.g. -0.005 -0.0025 0.0025 0.005.")
+        raise SystemExit(
+            "Use symmetric +/- strain amplitudes, e.g. -0.005 -0.0025 0.0025 0.005."
+        )
 
     root = args.out.expanduser().resolve()
     root.mkdir(parents=True, exist_ok=True)
