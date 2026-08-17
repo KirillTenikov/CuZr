@@ -69,8 +69,8 @@ def potential_block(potential: Potential, repo_root: Path) -> str:
         )
     if family == "ACE":
         return (
-            "# ACE through pair_style pace\n"
-            "pair_style pace\n"
+            "# ACE through pair_style pace using the product evaluator for KOKKOS/pace/kk\n"
+            "pair_style pace product\n"
             f"pair_coeff * * {model_path} Cu Zr\n"
         )
     if family == "EAM":

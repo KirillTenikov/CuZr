@@ -33,14 +33,14 @@
       "family": "ACE",
       "path": "${ACE_514_FILE}",
       "enabled": true,
-      "lmp_command": "lmp"
+      "lmp_command": "lmp -k on g 1 -sf kk -pk kokkos newton on neigh half"
     },
     {
       "id": "ACE_1352",
       "family": "ACE",
       "path": "${ACE_1352_FILE}",
       "enabled": true,
-      "lmp_command": "lmp"
+      "lmp_command": "lmp -k on g 1 -sf kk -pk kokkos newton on neigh half"
     },
     {
       "id": "EAM_Mendelev_2019_CuZr",

@@ -10,9 +10,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
-from paper1_revision.config import Potential, load_protocol
+from paper1_revision.config import Potential, load_potentials, load_protocol
 from paper1_revision.lammps import RunSpec, generate_inputs
-from paper1_revision.potentials import resolve_model_path
+from paper1_revision.potentials import potential_block, resolve_model_path
 from paper1_revision.structure import composition_counts, estimate_box_length_A, parse_composition, write_initial_data
 from paper1_revision.thermo import parse_thermo_tables, summarize_log
 
@@ -121,6 +121,31 @@ class PotentialPathTests(unittest.TestCase):
         with patch.dict(os.environ, {}, clear=True):
             with self.assertRaises(EnvironmentError):
                 resolve_model_path(Path("/tmp/repo"), "${MACE_C_MLIAP}")
+
+    def test_ace_potential_block_uses_product_evaluator(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            model = repo / "models" / "raw" / "ace_514.yaml"
+            model.parent.mkdir(parents=True)
+            model.write_bytes(b"dummy")
+            potential = Potential(
+                id="ACE_514",
+                family="ACE",
+                path=str(model),
+                enabled=True,
+                lmp_command="lmp -k on g 1 -sf kk -pk kokkos newton on neigh half",
+            )
+            block = potential_block(potential, repo)
+            self.assertIn("pair_style pace product", block)
+            self.assertIn(str(model.resolve()), block)
+
+    def test_ace_config_uses_kokkos_gpu_command(self):
+        potentials = load_potentials(ROOT / "config" / "potentials.json")
+        for potential_id in ("ACE_514", "ACE_1352"):
+            command = potentials[potential_id].lmp_command
+            self.assertIn("-k on g 1", command)
+            self.assertIn("-sf kk", command)
+            self.assertIn("-pk kokkos newton on neigh half", command)
 
 
 class ThermoTests(unittest.TestCase):
