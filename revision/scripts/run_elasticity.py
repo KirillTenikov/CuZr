@@ -3,8 +3,10 @@
 Generate and optionally execute zero-temperature relaxed-ion elasticity
 calculations from an already relaxed amorphous structure.
 
-Each strained calculation starts independently from the same source structure.
-The strained cell is held fixed while atomic coordinates are minimized.
+A canonical zero-strain reference is minimized first from the supplied source
+structure.  Every strained calculation then starts independently from that same
+canonical reference.  The strained cell is held fixed while atomic coordinates
+are minimized.
 
 Primary strain conventions
 --------------------------
@@ -30,7 +32,7 @@ import subprocess
 from pathlib import Path
 
 
-DEFAULT_STRAINS = (-0.005, -0.0025, 0.0025, 0.005)
+DEFAULT_STRAINS = (-0.00125, -0.000625, 0.000625, 0.00125)
 
 
 def sha256_file(path: Path) -> str:
@@ -60,6 +62,19 @@ def strain_tag(value: float) -> str:
     sign = "p" if value > 0 else "m"
     body = f"{abs(value):.6f}".replace(".", "p")
     return f"{sign}{body}"
+
+
+def input_data_for_mode(
+    mode: str,
+    source_data: Path,
+    reference_data: Path,
+) -> Path:
+    """Return the structure that should seed one elasticity job.
+
+    The unstrained reference is minimized from the supplied source structure.
+    All strained jobs are then seeded from the resulting canonical reference.
+    """
+    return source_data if mode == "reference" else reference_data
 
 
 def deformation_block(mode: str, strain: float) -> str:
@@ -367,11 +382,15 @@ def main() -> None:
     negatives = sorted(-x for x in args.strains if x < 0)
     if positives != negatives:
         raise SystemExit(
-            "Use symmetric +/- strain amplitudes, e.g. -0.005 -0.0025 0.0025 0.005."
+            "Use symmetric +/- strain amplitudes, e.g. "
+            "-0.00125 -0.000625 0.000625 0.00125."
         )
 
     root = args.out.expanduser().resolve()
     root.mkdir(parents=True, exist_ok=True)
+
+    reference_dir = root / "reference" / strain_tag(0.0)
+    reference_data = reference_dir / "relaxed.data"
 
     protocol = {
         "created_utc": dt.datetime.now(dt.timezone.utc).isoformat(),
@@ -379,6 +398,11 @@ def main() -> None:
         "label": args.label,
         "source_data": str(data_file),
         "source_data_sha256": sha256_file(data_file),
+        "canonical_reference_data": str(reference_data),
+        "reference_strategy": (
+            "Minimize the supplied source once at zero strain, then start every "
+            "strained calculation independently from that canonical reference."
+        ),
         "pair_style": args.pair_style,
         "pair_coeff": args.pair_coeff,
         "lammps_command": args.lmp_cmd,
@@ -411,8 +435,21 @@ def main() -> None:
 
     for mode, strain in jobs:
         job_dir = root / mode / strain_tag(strain)
+        job_data_file = input_data_for_mode(
+            mode=mode,
+            source_data=data_file,
+            reference_data=reference_data,
+        )
+
+        if mode != "reference" and args.execute and not reference_data.is_file():
+            raise RuntimeError(
+                "Canonical zero-strain reference is missing: "
+                f"{reference_data}. The reference job must complete before "
+                "strained jobs are executed."
+            )
+
         input_text = make_input(
-            data_file=data_file,
+            data_file=job_data_file,
             pair_style=args.pair_style,
             pair_coeff=args.pair_coeff,
             mode=mode,
